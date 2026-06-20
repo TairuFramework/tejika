@@ -1,6 +1,6 @@
 {
   "name": "@tejika/server",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -27,7 +27,6 @@
     "@enkaku/protocol": "catalog:",
     "@hono/node-server": "catalog:",
     "@tejika/env": "workspace:^",
-    "get-port": "catalog:",
     "hono": "catalog:"
   },
   "devDependencies": {

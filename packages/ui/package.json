@@ -1,12 +1,16 @@
 {
   "name": "@tejika/ui",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
-  "exports": { ".": "./lib/index.js" },
-  "files": ["lib/*"],
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "files": [
+    "lib/*"
+  ],
   "sideEffects": false,
   "scripts": {
     "build:clean": "del lib",

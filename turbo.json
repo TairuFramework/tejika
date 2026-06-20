@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/turbo/schema.json",
+  "tasks": {
+    "clean": {},
+    "build:js": {
+      "dependsOn": ["^clean"],
+      "outputs": ["lib/**"]
+    }
+  }
+}

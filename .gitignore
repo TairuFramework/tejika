@@ -1,0 +1,8 @@
+coverage
+lib
+node_modules
+
+**/.claude/settings.local.json
+.swc
+.turbo
+.vscode

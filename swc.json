@@ -1,0 +1,10 @@
+{
+  "jsc": {
+    "parser": { "syntax": "typescript", "tsx": true },
+    "target": "es2022",
+    "transform": {
+      "react": { "runtime": "automatic" },
+      "optimizer": { "globals": { "vars": { "process.env.NODE_ENV": "production" } } }
+    }
+  }
+}

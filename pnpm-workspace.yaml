@@ -1,0 +1,45 @@
+packages:
+  - packages/*
+
+catalog:
+  '@biomejs/biome': ^2.5.0
+  '@enkaku/client': ^0.17.0
+  '@enkaku/http-server-transport': ^0.17.0
+  '@enkaku/server': ^0.17.0
+  '@enkaku/socket-transport': ^0.17.0
+  '@hono/node-server': ^2.0.5
+  '@inkjs/ui': ^2.0.0
+  '@swc/cli': ^0.8.1
+  '@swc/core': ^1.15.41
+  '@types/node': ^25.9.3
+  '@types/react': ^19.2.17
+  '@vitest/ui': ^4.1.9
+  commander: ^15.0.0
+  del-cli: ^7.0.0
+  env-paths: ^3.0.0
+  get-port: ^7.2.0
+  hono: ^4.12.26
+  ink: ^7.1.0
+  ink-testing-library: ^4.0.0
+  nano-spawn: ^2.1.0
+  react: ^19.2.7
+  strip-ansi: ^7.2.0
+  tsx: ^4.22.4
+  turbo: ^2.9.18
+  typescript: ^6.0.3
+  vitest: ^4.1.9
+
+catalogMode: manual
+
+minimumReleaseAgeExclude:
+  - '@enkaku/*'
+
+supportedArchitectures:
+  cpu: [ current ]
+  os: [ current ]
+
+allowBuilds:
+  '@biomejs/biome': true
+  '@swc/core': true
+  esbuild: true
+  node-pty: true

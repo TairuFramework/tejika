@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "lib": ["es2025"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "target": "es2025"
+  }
+}

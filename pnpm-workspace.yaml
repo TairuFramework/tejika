@@ -5,6 +5,7 @@ catalog:
   '@biomejs/biome': ^2.5.0
   '@enkaku/client': ^0.17.0
   '@enkaku/http-server-transport': ^0.17.0
+  '@enkaku/protocol': ^0.17.0
   '@enkaku/server': ^0.17.0
   '@enkaku/socket-transport': ^0.17.0
   '@hono/node-server': ^2.0.5

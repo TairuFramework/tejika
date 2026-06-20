@@ -12,6 +12,9 @@ catalogs:
     '@enkaku/client':
       specifier: ^0.17.0
       version: 0.17.1
+    '@enkaku/http-server-transport':
+      specifier: ^0.17.0
+      version: 0.17.0
     '@enkaku/protocol':
       specifier: ^0.17.0
       version: 0.17.1
@@ -21,6 +24,9 @@ catalogs:
     '@enkaku/socket-transport':
       specifier: ^0.17.0
       version: 0.17.0
+    '@hono/node-server':
+      specifier: ^2.0.5
+      version: 2.0.5
     '@swc/cli':
       specifier: ^0.8.1
       version: 0.8.1
@@ -42,6 +48,9 @@ catalogs:
     get-port:
       specifier: ^7.2.0
       version: 7.2.0
+    hono:
+      specifier: ^4.12.26
+      version: 4.12.26
     nano-spawn:
       specifier: ^2.1.0
       version: 2.1.0
@@ -126,6 +135,31 @@ importers:
       nano-spawn:
         specifier: 'catalog:'
         version: 2.1.0
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.9.4
+
+  packages/server:
+    dependencies:
+      '@enkaku/http-server-transport':
+        specifier: 'catalog:'
+        version: 0.17.0
+      '@enkaku/protocol':
+        specifier: 'catalog:'
+        version: 0.17.1
+      '@hono/node-server':
+        specifier: 'catalog:'
+        version: 2.0.5(hono@4.12.26)
+      '@tejika/env':
+        specifier: workspace:^
+        version: link:../env
+      get-port:
+        specifier: 'catalog:'
+        version: 7.2.0
+      hono:
+        specifier: 'catalog:'
+        version: 4.12.26
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -223,6 +257,9 @@ packages:
 
   '@enkaku/execution@0.17.0':
     resolution: {integrity: sha512-Ek7IlUDzjNymsxdC4Ru3+x3i6rSo7qpsGIy0CGiy0Su6l2xA5SC8XRs95STHjNVZ35QtvXwEFamxZxWwqMx3Dw==}
+
+  '@enkaku/http-server-transport@0.17.0':
+    resolution: {integrity: sha512-g27VRZqf3O4ovMPP3Bctt4X3bhK1iCRXf3hg73NaloNdfizI2cb129BD4kQwg7sCCySmBg9QbbA5oqL1zKUkaA==}
 
   '@enkaku/log@0.17.0':
     resolution: {integrity: sha512-gpSzOmrglQKgo37MW2f3BTT5ABFjiebFy80VZCIHbLBFS8pTSwOylUDLicC/p0U70lfM870a5Hi9GoWr7M9RgQ==}
@@ -412,6 +449,12 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@hono/node-server@2.0.5':
+    resolution: {integrity: sha512-yQFvDmyDo3y6rEOJZDUYPJ49DIKTPpIk4kGvm40xx4Ejne0Pu9a1+exxPN+C1UppWK/WGZX9F++/Xs231tE86g==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      hono: ^4
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
@@ -1189,6 +1232,10 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
+  hono@4.12.26:
+    resolution: {integrity: sha512-uyZtpnYxM9CmQ7QsQknM4zN8EftNqhON1qYeIKM0Se67CCEe2c44xyGURwB0axX2fBDu1dqHrHAc1hmNT8ITkw==}
+    engines: {node: '>=16.9.0'}
+
   http-cache-semantics@4.2.0:
     resolution: {integrity: sha512-dTxcvPXqPvXBQpq5dUr6mEMJX4oIEFv6bwom3FDwKRDsuIjjJGANqhBuoAn9c1RQJIdAKav33ED65E2ys+87QQ==}
 
@@ -1881,6 +1928,15 @@ snapshots:
       '@enkaku/async': 0.17.0
       '@enkaku/result': 0.17.0
 
+  '@enkaku/http-server-transport@0.17.0':
+    dependencies:
+      '@enkaku/async': 0.17.0
+      '@enkaku/otel': 0.17.1
+      '@enkaku/protocol': 0.17.1
+      '@enkaku/runtime': 0.17.0
+      '@enkaku/stream': 0.17.0
+      '@enkaku/transport': 0.17.0
+
   '@enkaku/log@0.17.0':
     dependencies:
       '@logtape/logtape': 2.1.5
@@ -2024,6 +2080,10 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.1':
     optional: true
+
+  '@hono/node-server@2.0.5(hono@4.12.26)':
+    dependencies:
+      hono: 4.12.26
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
@@ -2757,6 +2817,8 @@ snapshots:
       type-fest: 4.41.0
 
   graceful-fs@4.2.11: {}
+
+  hono@4.12.26: {}
 
   http-cache-semantics@4.2.0: {}
 

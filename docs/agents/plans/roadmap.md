@@ -1,10 +1,12 @@
 # Tejika Roadmap
 
-## Phase 1 — Foundation packages (P1)
-- `@tejika/env`, `@tejika/process`, `@tejika/server` extracted from Mokei. Mokei consumes them.
+## Phase 1 + 2 — Foundation + CLI packages (DONE)
+- All five `@tejika/*` packages built and published at `0.1.0`: `env`, `process`,
+  `server`, `cli`, `ui`. See `completed/2026-06-20-tejika-packages-extraction.partial.md`.
 
-## Phase 2 — CLI packages (P2)
-- `@tejika/cli`, `@tejika/ui` extracted from Mokei. Mokei fully migrated.
+## Next — Mokei adopts `@tejika/*`
+- Migrate Mokei to consume the five packages and delete its duplicated code.
+  See `next/2026-06-20-mokei-tejika-migration.md`.
 
 ## Later (separate repos / specs)
-- P3 Sakui migration. P4 Kubun migration.
+- Sakui migration. Kubun migration.

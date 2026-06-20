@@ -32,6 +32,7 @@
 - Create: `turbo.json`
 - Create: `biome.json`
 - Create: `.gitignore`
+- Create: `.githooks/pre-commit`
 
 **Interfaces:**
 - Consumes: nothing (first task).
@@ -98,6 +99,7 @@ allowBuilds:
   "private": true,
   "packageManager": "pnpm@11.8.0",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
     "lint": "biome check --write ./packages",
     "test": "pnpm run --filter './packages/**' test",
     "build:js": "turbo run build:js",
@@ -244,10 +246,40 @@ node_modules
 .vscode
 ```
 
+`.githooks/pre-commit` (mode `0755`, mirrors enkaku):
+```sh
+#!/bin/sh
+
+echo "Running pre-commit checks..."
+
+echo "Linting staged files..."
+pnpm biome check --write --staged --no-errors-on-unmatched
+if [ $? -ne 0 ]; then
+  echo "Lint check failed. Fix errors before committing."
+  exit 1
+fi
+
+echo "Type checking..."
+pnpm run build:types
+if [ $? -ne 0 ]; then
+  echo "Type check failed. Fix errors before committing."
+  exit 1
+fi
+
+echo "Pre-commit checks passed."
+```
+
+The hook uses `pnpm biome` directly (not `rtk`) so the committed hook is
+self-contained and portable. The `prepare` script wires `core.hooksPath` to
+`.githooks` on every `pnpm install`.
+
 - [ ] **Step 4: Install and verify tooling resolves**
 
 Run: `pnpm install`
-Expected: completes, writes `pnpm-lock.yaml`, no catalog resolution errors.
+Expected: completes, writes `pnpm-lock.yaml`, no catalog resolution errors, and
+runs `prepare` (sets `core.hooksPath` to `.githooks`). Verify with
+`git config core.hooksPath` → `.githooks`. Ensure `.githooks/pre-commit` is
+executable (`chmod +x`).
 
 Run: `pnpm lint`
 Expected: biome runs, reports no files to fix / exits 0 (no `packages/` source yet).
@@ -255,7 +287,7 @@ Expected: biome runs, reports no files to fix / exits 0 (no `packages/` source y
 - [ ] **Step 5: Commit**
 
 ```bash
-git add package.json pnpm-workspace.yaml tsconfig.build.json tsconfig.json swc.json turbo.json biome.json .gitignore pnpm-lock.yaml
+git add package.json pnpm-workspace.yaml tsconfig.build.json tsconfig.json swc.json turbo.json biome.json .gitignore .githooks/pre-commit pnpm-lock.yaml
 git commit -m "chore: scaffold tejika workspace and tooling"
 ```
 

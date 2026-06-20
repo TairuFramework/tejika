@@ -6,6 +6,7 @@
   "private": true,
   "packageManager": "pnpm@11.8.0",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
     "lint": "biome check --write ./packages",
     "test": "pnpm run --filter './packages/**' test",
     "build:js": "turbo run build:js",

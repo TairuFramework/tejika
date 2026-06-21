@@ -7,7 +7,7 @@ import type {
   ProtocolDefinition,
   ServerMessage,
 } from '@enkaku/protocol'
-import { connectSocket, SocketTransport } from '@enkaku/socket-transport'
+import { connectSocket, SocketTransport } from '@enkaku/socket'
 import { getSocketPath } from '@tejika/env'
 
 /** Reconnect backoff bounds: start fast, cap at a few seconds. */

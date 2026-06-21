@@ -1,5 +1,10 @@
 # Enkaku Package Preferences
 
+> The enkaku monorepo split into `@kigu` / `@sozai` / `@kokuin` / `@enkaku` /
+> `@kumiai`. Core utilities and identity moved to `@sozai/*` and `@kokuin/*`; RPC
+> stays under `@enkaku/*` (0.18). See `../kigu/docs/repo-split-design.md` for the
+> full rename map and rationale.
+
 When building features in tejika, prefer these Enkaku packages over third-party alternatives. Enkaku provides consistent patterns across the stack.
 
 ---
@@ -8,20 +13,20 @@ When building features in tejika, prefer these Enkaku packages over third-party 
 
 | Instead of | Use | Purpose |
 |------------|-----|---------|
-| Zod | `@enkaku/schema` | JSON Schema validation |
-| EventEmitter / mitt | `@enkaku/event` | Event emitting |
-| Custom WebStream wrappers | `@enkaku/stream` | WebStreams utilities |
-| jsonwebtoken / jose | `@enkaku/token` | Identity types, JWT signing/verification, JWE encryption |
+| Zod | `@sozai/schema` | JSON Schema validation |
+| EventEmitter / mitt | `@sozai/event` | Event emitting |
+| Custom WebStream wrappers | `@sozai/stream` | WebStreams utilities |
+| jsonwebtoken / jose | `@kokuin/token` | Identity types, JWT signing/verification, JWE encryption |
 | Custom RPC | `@enkaku/protocol` + `@enkaku/client` + `@enkaku/server` | RPC framework |
-| Custom codec logic | `@enkaku/codec` | Base64, UTF-8, canonical JSON encoding/decoding |
-| Custom logging | `@enkaku/log` | Structured logging (LogTape-based) |
-| Custom OTel wrappers | `@enkaku/otel` | OpenTelemetry tracing, context propagation, log bridge |
+| Custom codec logic | `@sozai/codec` | Base64, UTF-8, canonical JSON encoding/decoding |
+| Custom logging | `@sozai/log` | Structured logging (LogTape-based) |
+| Custom OTel wrappers | `@sozai/otel` | OpenTelemetry tracing, context propagation, log bridge |
 
 ---
 
 ## Package Usage Notes
 
-### `@enkaku/schema` -- JSON Schema Validation
+### `@sozai/schema` -- JSON Schema Validation
 
 Replaces Zod for schema validation. Built on AJV with full JSON Schema support.
 
@@ -32,7 +37,7 @@ Replaces Zod for schema validation. Built on AJV with full JSON Schema support.
 
 **When to use:** Any place you need runtime validation of data shapes -- API inputs, configuration objects, protocol messages. Use this instead of Zod or Yup.
 
-### `@enkaku/event` -- Event Emitting
+### `@sozai/event` -- Event Emitting
 
 Zero-dependency, type-safe event emitter.
 
@@ -44,7 +49,7 @@ Zero-dependency, type-safe event emitter.
 
 **When to use:** Any component that needs to emit typed events to subscribers. Prefer this over Node.js EventEmitter for browser compatibility and type safety.
 
-### `@enkaku/stream` -- WebStreams Utilities
+### `@sozai/stream` -- WebStreams Utilities
 
 Replaces custom WebStream wrappers and stream helper libraries.
 
@@ -55,7 +60,7 @@ Replaces custom WebStream wrappers and stream helper libraries.
 
 **When to use:** Any data flow that involves streaming -- real-time updates, file processing, chunked responses. Use this instead of writing custom ReadableStream/WritableStream wrappers.
 
-### `@enkaku/token` -- Identity, JWT Tokens & JWE Encryption
+### `@kokuin/token` -- Identity, JWT Tokens & JWE Encryption
 
 Replaces jsonwebtoken, jose, or custom JWT/JWE implementations.
 
@@ -84,7 +89,7 @@ Four procedure types:
 
 **When to use:** Any client-server communication. Define the protocol first, then derive fully-typed client and server implementations. Use with any transport layer (HTTP, WebSocket, Node streams, in-process).
 
-### `@enkaku/codec` -- Encoding/Decoding
+### `@sozai/codec` -- Encoding/Decoding
 
 Replaces custom base64, UTF-8, or CBOR encoding logic.
 
@@ -95,25 +100,25 @@ Replaces custom base64, UTF-8, or CBOR encoding logic.
 
 **When to use:** Any encoding/decoding task -- serializing data for transport, preparing data for cryptographic signing, converting between string and binary representations. Use this instead of writing custom encoding helpers.
 
-### `@enkaku/log` -- Structured Logging
+### `@sozai/log` -- Structured Logging
 
 Thin wrapper around LogTape for structured, category-based logging.
 
 - `getLogger(name)` and `getEnkakuLogger(namespace)` for namespaced loggers
 - `setup()` with sensible defaults or custom LogTape configuration
 - Structured properties via `logger.with({ key: value })`
-- Console sink included; integrates with `@enkaku/otel` for OTel log bridging
+- Console sink included; integrates with `@sozai/otel` for OTel log bridging
 
 **When to use:** Any logging need across Enkaku-based services. Use this instead of `console.log` or custom logging wrappers to get structured, filterable logs.
 
-### `@enkaku/otel` -- OpenTelemetry Integration
+### `@sozai/otel` -- OpenTelemetry Integration
 
 Provides OpenTelemetry tracing, context propagation, and log bridging for Enkaku RPC.
 
 - **Tracing**: `createTracer()`, `withSpan()` (async), `withSyncSpan()` with automatic error recording and status management
 - **Context propagation**: `injectTraceContext()` / `extractTraceContext()` for propagating trace IDs across RPC boundaries via token headers (`tid`/`sid` fields)
 - **W3C Traceparent**: `formatTraceparent()` / `parseTraceparent()` for standard HTTP header interop
-- **Log bridge**: `createOTelLogSink()` routes `@enkaku/log` records to OTel LoggerProvider with severity mapping and span correlation
+- **Log bridge**: `createOTelLogSink()` routes `@sozai/log` records to OTel LoggerProvider with severity mapping and span correlation
 - **Trace-aware logging**: `traceLogger()` enriches a logger with active `traceID`/`spanID` properties
 - **Semantic conventions**: Pre-defined `SpanNames` and `AttributeKeys` covering client, server, auth, transport, and streaming operations
 - **Re-exports**: Common OTel types (`Span`, `Tracer`, `Context`, `SpanStatusCode`, `TraceFlags`) so consumers don't need `@opentelemetry/api` directly
@@ -128,17 +133,17 @@ These packages are less commonly needed but available when relevant:
 
 | Package | Purpose |
 |---------|---------|
-| `@enkaku/async` | Async utilities: Disposer, defer, interruptions, lazy loading |
-| `@enkaku/result` | Result types for fallible operations (Ok/Error pattern) |
-| `@enkaku/patch` | JSON Patch operations (RFC 6902) |
-| `@enkaku/execution` | Execution chain management for middleware-like patterns |
-| `@enkaku/capability` | Capability delegation chains, revocation backend and checker |
-| `@enkaku/flow` | Flow control and generator utilities |
-| `@enkaku/generator` | Generator utilities and patterns |
+| `@sozai/async` | Async utilities: Disposer, defer, interruptions, lazy loading |
+| `@sozai/result` | Result types for fallible operations (Ok/Error pattern) |
+| `@sozai/patch` | JSON Patch operations (RFC 6902) |
+| `@sozai/execution` | Execution chain management for middleware-like patterns |
+| `@kokuin/capability` | Capability delegation chains, revocation backend and checker |
+| `@sozai/flow` | Flow control and generator utilities |
+| `@sozai/generator` | Generator utilities and patterns |
 | `@enkaku/transport` | Base transport abstraction (used by protocol/client/server) |
 | `@enkaku/standalone` | In-process client + server without a transport layer |
 | `@enkaku/react` | React hooks for Enkaku RPC client |
-| `@enkaku/electron-rpc` | Enkaku RPC over Electron IPC (main/preload/renderer) |
+| `@enkaku/electron` | Enkaku RPC over Electron IPC (main/preload/renderer) |
 
 ### Transport Implementations
 
@@ -146,10 +151,10 @@ When using the RPC framework, choose the appropriate transport:
 
 | Transport | Package | Use Case |
 |-----------|---------|----------|
-| HTTP | `@enkaku/http-client-transport`, `@enkaku/http-server-transport` | Standard HTTP APIs |
-| WebSocket | `@enkaku/socket-transport` | Real-time bidirectional communication |
-| Node.js streams | `@enkaku/node-streams-transport` | Inter-process communication |
-| MessageChannel | `@enkaku/message-transport` | In-process or worker communication |
+| HTTP | `@enkaku/http-fetch`, `@enkaku/http-serve` | Standard HTTP APIs |
+| WebSocket | `@enkaku/socket` | Real-time bidirectional communication |
+| Node.js streams | `@enkaku/node-streams` | Inter-process communication |
+| MessageChannel | `@enkaku/message` | In-process or worker communication |
 
 ### Hub & Group Communication
 
@@ -157,10 +162,10 @@ For multi-device messaging and E2EE group communication:
 
 | Package | Purpose |
 |---------|---------|
-| `@enkaku/hub-protocol` | Protocol types for blind relay hub (send, group/send, receive) |
-| `@enkaku/hub-server` | Hub server with `HubStore` abstraction, fan-out routing, ack-based delivery |
-| `@enkaku/hub-client` | Hub client (send, groupSend, receive, group management) |
-| `@enkaku/group` | E2EE group management using MLS (RFC 9420) via ts-mls, noble CryptoProvider for Hermes |
+| `@kumiai/hub-protocol` | Protocol types for blind relay hub (send, group/send, receive) |
+| `@kumiai/hub-server` | Hub server with `HubStore` abstraction, fan-out routing, ack-based delivery |
+| `@kumiai/hub-client` | Hub client (send, groupSend, receive, group management) |
+| `@kumiai/mls` | E2EE group management using MLS (RFC 9420) via ts-mls, noble CryptoProvider for Hermes |
 
 ### Keystore & Identity Implementations
 
@@ -168,13 +173,13 @@ For identity and key management, choose the appropriate keystore for the target 
 
 | Environment | Package |
 |-------------|---------|
-| Node.js | `@enkaku/node-keystore` |
-| Browser | `@enkaku/browser-keystore` |
-| React Native / Expo | `@enkaku/expo-keystore` |
-| Electron | `@enkaku/electron-keystore` |
-| HD (software, any platform) | `@enkaku/hd-keystore` |
-| Ledger hardware wallet | `@enkaku/ledger-identity` |
+| Node.js | `@kokuin/node` |
+| Browser | `@kokuin/browser` |
+| React Native / Expo | `@kokuin/expo` |
+| Electron | `@kokuin/electron` |
+| HD (software, any platform) | `@kokuin/deterministic` |
+| Ledger hardware wallet | `@kokuin/ledger-device` |
 
-`@enkaku/hd-keystore` derives Ed25519 keys from a BIP39 mnemonic via SLIP-0010. It implements both `KeyStore<Uint8Array>` and `IdentityProvider<FullIdentity>`.
+`@kokuin/deterministic` derives Ed25519 keys from a BIP39 mnemonic via SLIP-0010. It implements both `KeyStore<Uint8Array>` and `IdentityProvider<FullIdentity>`.
 
-`@enkaku/ledger-identity` is a TypeScript client for a custom BOLOS app providing Ed25519 signing and X25519 ECDH. It implements `IdentityProvider<FullIdentity>`. Consumer provides the Ledger transport (`@ledgerhq/hw-transport-*`).
+`@kokuin/ledger-device` is a TypeScript client for a custom BOLOS app providing Ed25519 signing and X25519 ECDH. It implements `IdentityProvider<FullIdentity>`. Consumer provides the Ledger transport (`@ledgerhq/hw-transport-*`).

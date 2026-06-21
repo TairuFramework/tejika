@@ -25,8 +25,8 @@ apps that compose these packages.
 
 ```
 @tejika/env       no @tejika deps (foundational)
-@tejika/process   env + @enkaku/{socket-transport,client,server} + nano-spawn
-@tejika/server    env + @enkaku/http-server-transport + hono + @hono/node-server + get-port
+@tejika/process   env + @enkaku/{socket,client,server} + nano-spawn
+@tejika/server    env + @enkaku/http-serve + hono + @hono/node-server + get-port
 @tejika/cli       commander, ink, react; env (default option values)
 @tejika/ui        ink, @inkjs/ui, react
 ```
@@ -36,7 +36,11 @@ other; consuming apps compose both.
 
 ## Key decision: depends on Enkaku directly
 
-Tejika depends on `@enkaku/*` (floor `^0.17`) directly rather than re-exporting or
+Tejika depends on `@enkaku/*` (floor `^0.18`) directly rather than re-exporting or
 wrapping it. The local-process and HTTP-server packages use Enkaku transports and
 client/server as-is. Bugs in `@enkaku/*` are fixed at the Enkaku source repo, never
 worked around here.
+
+The enkaku monorepo split (0.18 RPC) is documented in
+`../kigu/docs/repo-split-design.md`; `@enkaku/socket` / `@enkaku/http-serve` are
+the renamed transports.

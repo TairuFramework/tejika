@@ -16,7 +16,7 @@ import type {
   ServerTransportOf,
 } from '@enkaku/protocol'
 import type { Server } from '@enkaku/server'
-import { SocketTransport } from '@enkaku/socket-transport'
+import { SocketTransport } from '@enkaku/socket'
 import { getDataDir, getPidPath, getSocketPath } from '@tejika/env'
 import spawn from 'nano-spawn'
 import { safeRemove, waitForSocket } from './socket.js'

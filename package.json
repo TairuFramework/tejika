@@ -16,15 +16,6 @@
     "build:ci": "pnpm run build:types:ci && pnpm run build:js"
   },
   "devDependencies": {
-    "@biomejs/biome": "catalog:",
-    "@swc/cli": "catalog:",
-    "@swc/core": "catalog:",
-    "@types/node": "catalog:",
-    "@vitest/ui": "catalog:",
-    "del-cli": "catalog:",
-    "tsx": "catalog:",
-    "turbo": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "@kigu/dev": "^0.1.0"
   }
 }

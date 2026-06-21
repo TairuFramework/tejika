@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { ServerTransport } from '@enkaku/http-server-transport'
+import { ServerTransport } from '@enkaku/http-serve'
 import type { ProtocolDefinition } from '@enkaku/protocol'
 import { type ServerType, serve } from '@hono/node-server'
 import { getPort } from '@tejika/env'
@@ -52,7 +52,7 @@ export async function createLocalServer(opts: CreateLocalServerOptions): Promise
       `http://localhost:${port}`,
       `http://[::1]:${port}`,
     ])
-    const gate = async (ctx: Context, next: Next): Promise<Response | void> => {
+    const gate = async (ctx: Context, next: Next): Promise<Response | undefined> => {
       if (!verifyLoopbackRequest(ctx.req.raw, { allowedHosts, allowedOrigins, token })) {
         return ctx.text('Forbidden', 403)
       }
@@ -66,7 +66,7 @@ export async function createLocalServer(opts: CreateLocalServerOptions): Promise
 
   const allowedOrigin = opts.allowedOrigin ?? '*'
   const { auth } = opts
-  const gate = async (ctx: Context, next: Next): Promise<Response | void> => {
+  const gate = async (ctx: Context, next: Next): Promise<Response | undefined> => {
     ctx.header('Access-Control-Allow-Origin', allowedOrigin)
     if (auth?.mode === 'custom' && !auth.verify(ctx.req.raw)) {
       return ctx.text('Forbidden', 403)

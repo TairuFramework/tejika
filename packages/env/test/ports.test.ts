@@ -14,4 +14,13 @@ describe('getPort', () => {
     const port = await getPort('myapp', { default: 4000 })
     expect(port).toBeGreaterThan(0)
   })
+  test('falls back to an available port when override is empty', async () => {
+    process.env.MYAPP_PORT = ''
+    const port = await getPort('myapp', { default: 4000 })
+    expect(port).toBeGreaterThan(0)
+  })
+  test('throws on a non-numeric override', async () => {
+    process.env.MYAPP_PORT = 'abc'
+    await expect(getPort('myapp')).rejects.toThrow(/not a valid port/)
+  })
 })

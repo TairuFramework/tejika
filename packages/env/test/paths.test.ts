@@ -50,3 +50,23 @@ describe('getSocketPath', () => {
     expect(getSocketPath('myapp', 'monitor')).toMatch(/monitor\.sock$/)
   })
 })
+
+describe('empty override treated as unset', () => {
+  // `MYAPP_DATA_DIR= node …` defines the var as '' — must fall back, not return ''.
+  test('getDataDir falls back when override is empty', () => {
+    process.env.MYAPP_DATA_DIR = ''
+    expect(getDataDir('myapp')).toMatch(/myapp/)
+  })
+  test('getDataDir falls back when override is whitespace only', () => {
+    process.env.MYAPP_DATA_DIR = '   '
+    expect(getDataDir('myapp')).toMatch(/myapp/)
+  })
+  test('getSocketPath derives a path when override is empty', () => {
+    process.env.MYAPP_SOCKET_PATH = ''
+    expect(getSocketPath('myapp')).toMatch(/myapp.*\.sock$/)
+  })
+  test('getPidPath derives a path when override is empty', () => {
+    process.env.MYAPP_PID_PATH = ''
+    expect(getPidPath('myapp')).toMatch(/myapp.*\.pid$/)
+  })
+})

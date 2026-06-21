@@ -1,5 +1,5 @@
 {
-  "name": "@tejika/env",
+  "name": "@tejika/server",
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
@@ -23,8 +23,11 @@
     "test": "pnpm run test:types && pnpm run test:unit"
   },
   "dependencies": {
-    "env-paths": "catalog:",
-    "get-port": "catalog:"
+    "@enkaku/http-server-transport": "catalog:",
+    "@enkaku/protocol": "catalog:",
+    "@hono/node-server": "catalog:",
+    "@tejika/env": "workspace:^",
+    "hono": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:"

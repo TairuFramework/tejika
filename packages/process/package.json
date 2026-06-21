@@ -1,5 +1,5 @@
 {
-  "name": "@tejika/env",
+  "name": "@tejika/process",
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
@@ -23,8 +23,12 @@
     "test": "pnpm run test:types && pnpm run test:unit"
   },
   "dependencies": {
-    "env-paths": "catalog:",
-    "get-port": "catalog:"
+    "@enkaku/client": "catalog:",
+    "@enkaku/protocol": "catalog:",
+    "@enkaku/server": "catalog:",
+    "@enkaku/socket-transport": "catalog:",
+    "@tejika/env": "workspace:^",
+    "nano-spawn": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:"

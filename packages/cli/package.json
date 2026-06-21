@@ -1,5 +1,5 @@
 {
-  "name": "@tejika/env",
+  "name": "@tejika/cli",
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
@@ -23,10 +23,15 @@
     "test": "pnpm run test:types && pnpm run test:unit"
   },
   "dependencies": {
-    "env-paths": "catalog:",
-    "get-port": "catalog:"
+    "@tejika/env": "workspace:^",
+    "commander": "catalog:",
+    "ink": "catalog:",
+    "react": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "ink-testing-library": "catalog:",
+    "strip-ansi": "catalog:"
   }
 }

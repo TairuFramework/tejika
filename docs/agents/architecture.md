@@ -1,10 +1,10 @@
 # Tejika Architecture
 
-Tejika (手近, "near at hand") is the **local-side** foundation for the Yulsi stack —
+Tejika (手近, "near at hand") is a **local-side** foundation library —
 the counterpart to Enkaku (遠隔, "remote"). Enkaku provides the transport/remote
 primitives; tejika provides everything at hand on the local machine: local paths,
-ports, daemons, and HTTP servers. Tejika sits **above Enkaku and below**
-Mokei / Kubun / Sakui, which compose these packages into apps.
+ports, daemons, and HTTP servers. Tejika sits **above Enkaku and below** the
+apps that compose these packages.
 
 ## Packages
 

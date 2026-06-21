@@ -9,7 +9,7 @@ Mokei migration (Task 6) deferred to Mokei's own work (see
 ## Goal
 
 Build out the five `@tejika/*` packages by extracting and generalising the mature
-implementations from Mokei (donor) + one Sakui source, replacing app-specific
+implementations from Mokei (donor) + one consumer source, replacing app-specific
 constants with an `app: string` parameter resolved through `@tejika/env`, keeping
 the Enkaku wiring intact.
 
@@ -45,7 +45,7 @@ the Enkaku wiring intact.
 ## Key design decisions
 
 - **`app: string` is the uniform generalisation seam** — every place a
-  Mokei/Sakui constant baked in `~/.mokei`/`~/.sakui`, a socket path, pidfile, or
+  consumer constant baked in `~/.mokei`, a socket path, pidfile, or
   log path now takes `app` and resolves through `@tejika/env`.
 - **Depend on Enkaku directly** — `SocketTransport`/`Client`/`Server`/
   `ServerTransport` consumed straight, no transport-agnostic abstraction layer
@@ -80,7 +80,7 @@ the Enkaku wiring intact.
 - `injectToken` (XSS-escaping) is internal-only — not exported, no direct unit
   test (covered indirectly).
 - All packages' build tsconfig `include` is `./src/**/*`, so `test:types` does not
-  type-check `test/` (Yulsi-stack convention).
+  type-check `test/` (stack-wide convention).
 - `@tejika/process` daemon `shutdown` calls `server.close()` without awaiting the
   connection drain (single-client design); `spawnDaemon` has no socket-timeout
   override option.

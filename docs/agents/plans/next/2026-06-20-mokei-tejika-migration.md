@@ -59,9 +59,9 @@ version) as the first step — it affects every package.json edit below.
 
 ## Donor → tejika mapping (the code that moved, for diffing against the originals)
 
-- `@tejika/env` ← `sakui/apps/cli/src/paths.ts` + Mokei get-port usage.
+- `@tejika/env` ← a consumer CLI's `apps/cli/src/paths.ts` + Mokei get-port usage.
 - `@tejika/process` ← Mokei `host/src/daemon/{controller,process,socket}.ts`,
-  `host/src/server.ts`, `host/src/spawn.ts` + Sakui
+  `host/src/server.ts`, `host/src/spawn.ts` + a consumer CLI's
   `apps/cli/src/daemon/{controller,lifecycle,host}.ts`.
 - `@tejika/server` ← Mokei `host-monitor/src/{index,auth,html,pipes}.ts`.
 - `@tejika/cli` ← Mokei `cli/src/{program,ink,options}.ts`.

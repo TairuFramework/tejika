@@ -129,7 +129,7 @@ Run `pnpm run lint` to format and lint all packages. Run before committing.
 
 - Prefer **named imports** over default imports
 - Group imports in order: external libraries, internal `@scope/` packages, relative imports
-- Use workspace protocol for internal packages (e.g., `@sakui/ui-core`, `@kubun/client`)
+- Use workspace protocol for internal packages (e.g., `@tejika/env`, `@tejika/cli`)
 - Use **`type` keyword** for type-only imports
 - **Always import types via module-level `import type`, never via dynamic `import()`** -- dynamic `import()` type annotations defeat tree-shaking, hurt readability, and bypass import organization
 

@@ -1,6 +1,6 @@
 # Enkaku Package Preferences
 
-When building features in sakui, kubun, or mokei, prefer these Enkaku packages over third-party alternatives. Enkaku is maintained as part of the Yulsi stack and provides consistent patterns across all repos.
+When building features in tejika, prefer these Enkaku packages over third-party alternatives. Enkaku provides consistent patterns across the stack.
 
 ---
 

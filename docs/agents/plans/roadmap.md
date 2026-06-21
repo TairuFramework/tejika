@@ -9,4 +9,4 @@
   See `next/2026-06-20-mokei-tejika-migration.md`.
 
 ## Later (separate repos / specs)
-- Sakui migration. Kubun migration.
+- Other consumer migrations.

@@ -4,7 +4,7 @@ Orchestrate project-level management: priorities, roadmap, architecture review, 
 
 ## Path Context
 
-All paths assume this skill is running inside a consuming repo (sakui, enkaku, kubun, mokei). The agents repo contains no plans hierarchy or architecture docs — project-loop is propagated from agents but only operates in consuming repos.
+All paths assume this skill is running inside a consuming repo (e.g. tejika, enkaku, mokei). The agent-docs source repo contains no plans hierarchy or architecture docs — project-loop is propagated from there but only operates in consuming repos.
 
 ## Branch Expectations
 

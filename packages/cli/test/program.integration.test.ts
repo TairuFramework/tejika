@@ -9,8 +9,8 @@ const entry = fileURLToPath(new URL('./fixtures/cli-program.ts', import.meta.url
 
 // A program built via buildProgram runs as a real process and reports its
 // version. The fixture is run through tsx so no build step is needed; output is
-// ANSI-stripped before asserting (mirrors the Sakui strip-ansi CLI test pattern,
-// without a pseudo-TTY since `--version` is non-interactive).
+// ANSI-stripped before asserting (strip-ansi CLI test pattern, without a
+// pseudo-TTY since `--version` is non-interactive).
 test('buildProgram produces a runnable program that reports --version', {
   timeout: 30_000,
 }, async () => {

@@ -5,7 +5,7 @@
 
 ## Goal
 
-Stand up the `tejika` monorepo with the Yulsi stack's exact tooling and agent
+Stand up the `tejika` monorepo with the stack's exact tooling and agent
 conventions, plus one real proving package (`@tejika/env`'s first util) that
 validates the full build/types/test/lint pipeline.
 
@@ -44,14 +44,14 @@ validates the full build/types/test/lint pipeline.
   `types: lib/index.d.ts`, `exports`, `files: ["lib/*"]`, `sideEffects: false`.
 - All shared dep versions live in the workspace `catalog:`; packages reference
   `catalog:` / `workspace:^`, never raw ranges. Enkaku floor `^0.17`.
-- Sibling-repo layout assumption: `tejika`, `enkaku`, `mokei`, `kubun`, `sakui`,
-  `agents` are siblings under one parent. No absolute paths in committed files.
+- Sibling-repo layout assumption: `tejika`, `enkaku`, `mokei`, and the agent-docs
+  source repo are siblings under one parent. No absolute paths in committed files.
 - Agent docs are **manually propagated** from `../agents/` (no automation);
   `tejika`'s `AGENTS.md` references the `docs/agents/` sub-files and adds the
   repo-specific package overview + guardrails.
 
 ## Architecture framing
 
-Tejika (手近, "near at hand") is the local-side foundation for the Yulsi stack —
+Tejika (手近, "near at hand") is a local-side foundation library —
 the counterpart to Enkaku (遠隔, "remote"). It sits above Enkaku and below
-Mokei / Kubun / Sakui. Five packages: `env`, `process`, `server`, `cli`, `ui`.
+the apps that consume it. Five packages: `env`, `process`, `server`, `cli`, `ui`.

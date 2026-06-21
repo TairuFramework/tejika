@@ -73,7 +73,7 @@ describe('TokenValidator', () => {
 
 ## 7. Dependency Stack
 
-Core tools shared across all Yulsi repos:
+Core tools shared across all repos:
 
 | Tool | Purpose |
 |------|---------|
@@ -161,7 +161,7 @@ Format: Filename suffix (e.g., `YYYY-MM-DD-feature-name.complete.md`) and `**Sta
 
 ## 9. Agent Conduct
 
-How an agent should behave when writing or editing code in any Yulsi repo. These apply to every change, not just feature work. For trivial tasks, use judgment -- they bias toward caution over speed.
+How an agent should behave when writing or editing code in this repo. These apply to every change, not just feature work. For trivial tasks, use judgment -- they bias toward caution over speed.
 
 ### Think Before Coding
 - State assumptions explicitly. If uncertain, ask before implementing.

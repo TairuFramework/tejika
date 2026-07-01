@@ -44,5 +44,5 @@ packages/
 | Task | Files to read |
 |------|---------------|
 | Planning | `docs/agents/architecture.md`, `docs/agents/enkaku.md` |
-| Implementation | `docs/agents/conventions.md`, `docs/agents/development.md`, `docs/agents/enkaku.md` |
-| Review | `docs/agents/conventions.md`, `docs/agents/architecture.md`, `docs/agents/development.md` |
+| Implementation | the `conventions` and `development` skills, `docs/agents/enkaku.md` |
+| Review | the `conventions` skill, `docs/agents/architecture.md`, the `development` skill |

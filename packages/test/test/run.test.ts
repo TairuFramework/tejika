@@ -29,4 +29,9 @@ describe('runCLI', () => {
     expect(result.stdout).toBe('echoed')
     expect(result.code).toBe(0)
   })
+
+  test('does not crash when the child exits before draining a large stdin', async () => {
+    const result = await runCLI(['-e', 'process.exit(0)'], { input: 'x'.repeat(5 * 1024 * 1024) })
+    expect(result.code).toBe(0)
+  })
 })

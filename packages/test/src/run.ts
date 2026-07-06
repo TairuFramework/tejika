@@ -34,6 +34,7 @@ export function runCLI(args: Array<string>, options: RunCLIOptions = {}): Promis
     child.on('error', (err) => resolve({ stdout, stderr: stderr + err.message, code: null }))
     child.on('close', (code) => resolve({ stdout, stderr, code }))
     if (options.input != null) {
+      child.stdin?.on('error', () => {})
       child.stdin?.end(options.input)
     }
   })

@@ -54,6 +54,9 @@ catalogs:
     nano-spawn:
       specifier: ^2.1.0
       version: 2.1.0
+    node-pty:
+      specifier: ^1.1.0
+      version: 1.1.0
     react:
       specifier: ^19.2.7
       version: 19.2.7
@@ -84,6 +87,9 @@ importers:
         specifier: 'catalog:'
         version: 19.2.7
     devDependencies:
+      '@tejika/test':
+        specifier: workspace:^
+        version: link:../test
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.0
@@ -153,6 +159,28 @@ importers:
         specifier: 'catalog:'
         version: 4.12.27
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.1.0
+
+  packages/test:
+    dependencies:
+      '@tejika/env':
+        specifier: workspace:^
+        version: link:../env
+      '@tejika/process':
+        specifier: workspace:^
+        version: link:../process
+      node-pty:
+        specifier: 'catalog:'
+        version: 1.1.0
+      strip-ansi:
+        specifier: 'catalog:'
+        version: 7.2.0
+    devDependencies:
+      '@enkaku/server':
+        specifier: 'catalog:'
+        version: 0.18.1
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.0
@@ -1599,6 +1627,12 @@ packages:
     resolution: {integrity: sha512-y7Wygv/7mEOvxTuEQDB8StXdMRBWf1kR/tlhAzBRUFkB2jfcLOAxO/SHmOO2zgz1pVgK29/kyupn059/bCHdjA==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
+
+  node-addon-api@7.1.1:
+    resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
+
+  node-pty@1.1.0:
+    resolution: {integrity: sha512-20JqtutY6JPXTUnL0ij1uad7Qe1baT46lyolh2sSENDd4sTzKZ4nmAFkeAARDKwmlLjPx6XKRlwRUxwjOy+lUg==}
 
   normalize-url@8.1.1:
     resolution: {integrity: sha512-JYc0DPlpGWB40kH5g07gGTrYuMqV653k3uBKY6uITPWds3M0ov3GaWGp9lbE3Bzngx8+XkfzgvASb9vk9JDFXQ==}
@@ -3351,6 +3385,12 @@ snapshots:
   nano-spawn@2.1.0: {}
 
   nanoid@3.3.15: {}
+
+  node-addon-api@7.1.1: {}
+
+  node-pty@1.1.0:
+    dependencies:
+      node-addon-api: 7.1.1
 
   normalize-url@8.1.1: {}
 

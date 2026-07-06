@@ -16,6 +16,7 @@ packages/
 +-- server/     # Local Hono HTTP server: loopback-private (default) or network mode
 +-- cli/        # commander + Ink plumbing (buildProgram, runInk, option builders)
 +-- ui/         # Generic Ink component kit (StatusLine, ConfirmCard, SelectCard, ...)
++-- test/       # Integration-test harness: PTYDriver, runCLI, test profiles, daemon waits
 ```
 
 ## Quick Commands

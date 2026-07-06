@@ -63,6 +63,33 @@ Missing `*.log`, `.DS_Store`, `.env*`, `*.tsbuildinfo`, `.superpowers/`
   always skips. Reconcile (delete the reference or create the dir and pass the
   input).
 
+### From building `@tejika/test` (2026-07-06)
+
+Surfaced while building the `@tejika/test` package (see
+`docs/agents/plans/completed/2026-07-06-tejika-test-package.complete.md`):
+
+- **node-pty prebuilt exec-bit (low-med).** `@tejika/test` uses node-pty, whose
+  `prebuilds/<platform>/spawn-helper` must be executable; some installs land it
+  without the exec bit, so spawning a PTY fails with `posix_spawnp failed`. Add
+  a postinstall guard (`chmod +x` the helper) or a README/CI note so a fresh
+  install / CI runner doesn't hit an opaque failure.
+- **Fresh-clone build-order for globalSetup (med).** `@tejika/test`'s vitest
+  globalSetup calls `assertBuilt(['@tejika/env','@tejika/process'])`, and
+  `packages/cli`'s globalSetup imports `@tejika/test` (built `lib/`). On a fresh
+  clone, root `pnpm test` without a prior build fails at globalSetup — the test
+  package gives a clean "Not built: … run `pnpm build`" message; the cli package
+  gives a rawer module-resolution error. Model the root `test`/`test:unit` turbo
+  task with a `dependsOn: ["^build:js"]` (or document the build-first
+  requirement) so `pnpm test` is self-sufficient on an unbuilt tree.
+- **`rtk lint biome` is not a trustworthy gate (reinforces the two lint
+  findings above).** During this work the pre-commit hook's Biome
+  `organizeImports` autofix was left unstaged, so a commit shipped an
+  import-order violation that native `biome check` rejects — yet `rtk lint
+  biome` reported it clean. Whatever `lint:ci` / pre-commit changes land here
+  must be verified with native Biome (`biome ci ./packages` / `biome check`),
+  not the `rtk` wrapper, and should enable `assist/source/organizeImports`
+  enforcement alongside the `useConsistentArrayType` / `type` rules.
+
 ## Acceptance
 
 - CI fails on a deliberately introduced lint violation (verify once, then

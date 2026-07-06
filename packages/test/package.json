@@ -1,5 +1,5 @@
 {
-  "name": "@tejika/cli",
+  "name": "@tejika/test",
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
@@ -24,15 +24,12 @@
   },
   "dependencies": {
     "@tejika/env": "workspace:^",
-    "commander": "catalog:",
-    "ink": "catalog:",
-    "react": "catalog:"
+    "@tejika/process": "workspace:^",
+    "node-pty": "catalog:",
+    "strip-ansi": "catalog:"
   },
   "devDependencies": {
-    "@tejika/test": "workspace:^",
-    "@types/node": "catalog:",
-    "@types/react": "catalog:",
-    "ink-testing-library": "catalog:",
-    "strip-ansi": "catalog:"
+    "@enkaku/server": "catalog:",
+    "@types/node": "catalog:"
   }
 }

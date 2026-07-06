@@ -27,6 +27,18 @@ const ETX = '\u0003'
  * add app-specific flows. `using driver = new PTYDriver(...)` kills the PTY
  * at scope exit.
  */
+/**
+ * Default child env: the inherited env with `CI` removed. A PTY presents a real
+ * interactive terminal, but ci-info-based tools (Ink, etc.) switch to buffered
+ * non-interactive rendering when `CI` is set and never flush frames to the PTY.
+ * Callers passing an explicit `env` control this themselves.
+ */
+function interactiveEnv(): Record<string, string> {
+  const env = { ...process.env } as Record<string, string>
+  delete env.CI
+  return env
+}
+
 export class PTYDriver implements Disposable {
   #pty: IPty
   #buf = ''
@@ -38,7 +50,7 @@ export class PTYDriver implements Disposable {
       cols: options.cols ?? 100,
       rows: options.rows ?? 30,
       cwd: options.cwd,
-      env: options.env ?? (process.env as Record<string, string>),
+      env: options.env ?? interactiveEnv(),
     })
     this.#pty.onData((data) => {
       this.#buf += data

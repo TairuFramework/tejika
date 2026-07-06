@@ -20,6 +20,10 @@ apps that compose these packages.
   option builders). No domain components.
 - **`@tejika/ui`** — generic Ink component kit (`StatusLine`, `ConfirmCard`,
   `SelectCard`, ...). Behavior-first; domain components stay in apps.
+- **`@tejika/test`** — integration-test harness for tejika-built CLIs:
+  node-pty `PTYDriver`, non-interactive `runCLI`, disposable env-override test
+  profiles, daemon wait helpers, vitest globalSetup helpers. Consumed as a
+  devDependency only.
 
 ## Dependency graph
 
@@ -29,10 +33,13 @@ apps that compose these packages.
 @tejika/server    env + @enkaku/http-serve + hono + @hono/node-server + get-port
 @tejika/cli       commander, ink, react; env (default option values)
 @tejika/ui        ink, @inkjs/ui, react
+@tejika/test      env + process + node-pty + strip-ansi (devDependency for consumers)
 ```
 
 `env` underpins `process` and `server`. `cli` and `ui` are independent of each
-other; consuming apps compose both.
+other; consuming apps compose both. `test` builds on `env` + `process` and is
+test-side only — consumers (including tejika's own packages) take it as a
+devDependency.
 
 ## Key decision: depends on Enkaku directly
 

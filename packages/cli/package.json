@@ -29,6 +29,7 @@
     "react": "catalog:"
   },
   "devDependencies": {
+    "@tejika/test": "workspace:^",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "ink-testing-library": "catalog:",

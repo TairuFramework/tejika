@@ -6,7 +6,7 @@ import { getPort } from '@tejika/env'
 import { type Context, Hono, type Next } from 'hono'
 import { buildAllowedHosts, verifyLoopbackRequest } from './auth.js'
 
-export type AuthConfig = { mode: 'token' } | { mode: 'custom'; verify: (req: Request) => boolean }
+export type AuthConfig = { mode: 'custom'; verify: (req: Request) => boolean }
 
 export type CreateLocalServerOptions = {
   app: string
@@ -76,9 +76,15 @@ export async function createLocalServer(opts: CreateLocalServerOptions): Promise
 
   const allowedOrigin = opts.allowedOrigin ?? '*'
   const { auth } = opts
+  if (auth?.mode !== 'custom' || typeof auth.verify !== 'function') {
+    throw new Error(
+      "createLocalServer: bind:'network' requires auth:{mode:'custom', verify}. " +
+        'Network mode has no built-in authentication.',
+    )
+  }
   const gate = async (ctx: Context, next: Next): Promise<Response | undefined> => {
     ctx.header('Access-Control-Allow-Origin', allowedOrigin)
-    if (auth?.mode === 'custom' && !auth.verify(ctx.req.raw)) {
+    if (!auth.verify(ctx.req.raw)) {
       return ctx.text('Forbidden', 403)
     }
     await next()

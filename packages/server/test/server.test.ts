@@ -81,4 +81,17 @@ describe('createLocalServer (network)', () => {
     const denied = await server.app.request('/api', { headers: { 'x-key': 'nope' } })
     expect(denied.status).toBe(403)
   })
+
+  test('throws when network mode has no auth', async () => {
+    await expect(createLocalServer({ app: 'tejika-test', bind: 'network' })).rejects.toThrow(
+      /requires auth/,
+    )
+  })
+
+  test('throws when network mode is given the removed token auth', async () => {
+    await expect(
+      // @ts-expect-error token mode is no longer a valid network AuthConfig
+      createLocalServer({ app: 'tejika-test', bind: 'network', auth: { mode: 'token' } }),
+    ).rejects.toThrow(/requires auth/)
+  })
 })

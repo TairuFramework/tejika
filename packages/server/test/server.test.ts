@@ -97,7 +97,9 @@ describe('createLocalServer (network)', () => {
     expect(server.token).toBeUndefined()
     expect(server.url).toMatch(/^http:\/\/0\.0\.0\.0:\d+$/)
 
-    const allowed = await server.app.request('/api', { headers: { 'x-key': 'let-me-in' } })
+    const allowed = await server.app.request('/api', {
+      headers: { 'x-key': 'let-me-in', origin: 'https://example.com' },
+    })
     expect(allowed.status).not.toBe(403)
     expect(allowed.headers.get('access-control-allow-origin')).toBe('https://example.com')
 

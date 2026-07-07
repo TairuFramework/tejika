@@ -84,7 +84,6 @@ export async function createLocalServer(opts: CreateLocalServerOptions): Promise
     )
   }
   const authGate = async (ctx: Context, next: Next): Promise<Response | undefined> => {
-    ctx.header('Access-Control-Allow-Origin', allowedOrigin)
     if (!auth.verify(ctx.req.raw)) {
       return ctx.text('Forbidden', 403)
     }

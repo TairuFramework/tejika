@@ -7,12 +7,14 @@
 ## Now — Audit hardening (from repo audit 2026-07-02)
 
 Packages are live on npm, so security and publish correctness come first.
-Order of attack (each item is a plan in `next/`):
+Order of attack:
 
-1. `2026-07-06-server-security-hardening.md` — Host gate scope + network-mode
-   auth (security, small diffs).
+1. ~~Server security hardening — Host gate scope + network-mode auth.~~ **DONE
+   2026-07-07** (H1 DNS-rebinding index leak, H2 unauth network mode, CORS,
+   `serve()` lifecycle). See
+   `completed/2026-07-07-server-security-hardening.complete.md`.
 2. `2026-07-06-publishing-readiness.md` — LICENSE, metadata, `react`/`ink` to
-   peer deps, release automation.
+   peer deps, release automation. **← next**
 3. `2026-07-06-ci-and-tooling-integrity.md` — non-mutating `lint:ci`,
    pre-commit fix, turbo/biome/tsconfig.
 4. `2026-07-06-port-and-cli-option-validation.md` — env + CLI port validation,

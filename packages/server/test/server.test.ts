@@ -60,6 +60,17 @@ describe('createLocalServer (loopback)', () => {
     expect(foreign.status).toBe(403)
     expect(await foreign.text()).not.toContain('window.__APP_TOKEN__')
   })
+
+  test('serves over the real bound socket with a good Host + token', async () => {
+    const server = await createLocalServer({ app: 'tejika-test' })
+    close = server.close
+    server.app.get('/api/ping', (ctx) => ctx.text('pong'))
+    const res = await fetch(`${server.url}/api/ping`, {
+      headers: { authorization: `Bearer ${server.token}` },
+    })
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('pong')
+  })
 })
 
 describe('createLocalServer (network)', () => {
@@ -95,7 +106,7 @@ describe('createLocalServer (network)', () => {
     })
     close = server.close
     expect(server.token).toBeUndefined()
-    expect(server.url).toMatch(/^http:\/\/0\.0\.0\.0:\d+$/)
+    expect(server.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
 
     const allowed = await server.app.request('/api', {
       headers: { 'x-key': 'let-me-in', origin: 'https://example.com' },

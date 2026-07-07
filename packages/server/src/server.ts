@@ -105,13 +105,17 @@ export async function createLocalServer(opts: CreateLocalServerOptions): Promise
   app.use('/api', authGate)
   app.use('/api/*', authGate)
   const server = await listen(app, port, '0.0.0.0')
-  return { app, url: `http://0.0.0.0:${port}`, close: closeServer(server) }
+  // 0.0.0.0 is a bind wildcard, not a connectable address; report loopback, which
+  // is always reachable from this host. LAN peers use their own route to this host.
+  return { app, url: `http://127.0.0.1:${port}`, close: closeServer(server) }
 }
 
 /**
  * Mount an Enkaku HTTP server transport at `opts.path` on the Hono app and
  * return it, so the caller can wire it to a daemon (e.g. pipe its stream to a
  * socket transport). The route forwards each request to the transport's bridge.
+ * In loopback mode, pass a `path` under `/api` so the mounted transport inherits
+ * the Host/Origin/token gate; a path outside `/api` is served unauthenticated.
  */
 export function attachEnkakuTransport<Protocol extends ProtocolDefinition>(
   app: Hono,

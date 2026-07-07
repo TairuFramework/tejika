@@ -46,7 +46,10 @@ function listen(app: Hono, port: number, hostname: string): Promise<ServerType> 
  * generates a random bearer token, and gates `/api` with the Host/Origin/token
  * defenses (DNS-rebinding + CSRF + bearer). In `network` mode it binds 0.0.0.0,
  * applies CORS from `allowedOrigin`, and gates `/api` with the custom auth hook.
- * The returned Hono `app` is exposed so callers can attach routes/transports.
+ * The returned Hono `app` is exposed so callers can attach routes/transports —
+ * but only routes under `/api` inherit the gate. A route mounted outside `/api`
+ * bypasses auth in both modes, and in `network` mode is reachable unauthenticated
+ * by the whole LAN; keep state-changing endpoints under `/api`.
  */
 export async function createLocalServer(opts: CreateLocalServerOptions): Promise<LocalServer> {
   const bind = opts.bind ?? 'loopback'
@@ -114,8 +117,10 @@ export async function createLocalServer(opts: CreateLocalServerOptions): Promise
  * Mount an Enkaku HTTP server transport at `opts.path` on the Hono app and
  * return it, so the caller can wire it to a daemon (e.g. pipe its stream to a
  * socket transport). The route forwards each request to the transport's bridge.
- * In loopback mode, pass a `path` under `/api` so the mounted transport inherits
- * the Host/Origin/token gate; a path outside `/api` is served unauthenticated.
+ * Pass a `path` under `/api` so the mounted transport inherits the gate: the
+ * Host/Origin/token gate in loopback mode, or CORS + custom auth in network mode.
+ * A path outside `/api` is served unauthenticated — and in network mode is
+ * reachable by the whole LAN, so never mount an ungated transport there.
  */
 export function attachEnkakuTransport<Protocol extends ProtocolDefinition>(
   app: Hono,

@@ -35,6 +35,9 @@ function listen(app: Hono, port: number, hostname: string): Promise<ServerType> 
   return new Promise<ServerType>((resolve, reject) => {
     const server = serve({ fetch: app.fetch, port, hostname }, () => {
       server.off('error', reject)
+      // Startup succeeded; keep a persistent handler so a post-listen runtime
+      // 'error' is logged instead of crashing the process as an unhandled event.
+      server.on('error', (error) => console.error('[tejika/server] runtime error', error))
       resolve(server)
     })
     server.once('error', reject)

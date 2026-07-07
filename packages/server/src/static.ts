@@ -33,7 +33,10 @@ export function serveStaticSPA(app: Hono, opts: { dir: string; token: string }):
     ctx.html(injectToken(await readFile(indexPath, 'utf8'), opts.token))
   app.get('/', renderIndex)
   app.use('/*', serveStatic({ root }))
-  app.notFound((ctx) =>
-    ctx.req.path.startsWith('/api') ? ctx.text('Not Found', 404) : renderIndex(ctx),
-  )
+  app.notFound((ctx) => {
+    const path = ctx.req.path
+    return path === '/api' || path.startsWith('/api/')
+      ? ctx.text('Not Found', 404)
+      : renderIndex(ctx)
+  })
 }

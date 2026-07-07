@@ -59,6 +59,14 @@ describe('createLocalServer (loopback)', () => {
     const foreign = await server.app.request('/', { headers: { host: 'evil.example.com' } })
     expect(foreign.status).toBe(403)
     expect(await foreign.text()).not.toContain('window.__APP_TOKEN__')
+
+    // A deep client route (served via the SPA notFound fallback) must also 403
+    // for a foreign Host — the wildcard hostGate covers every path, not just /.
+    const foreignDeep = await server.app.request('/dashboard/settings', {
+      headers: { host: 'evil.example.com' },
+    })
+    expect(foreignDeep.status).toBe(403)
+    expect(await foreignDeep.text()).not.toContain('window.__APP_TOKEN__')
   })
 
   test('serves over the real bound socket with a good Host + token', async () => {

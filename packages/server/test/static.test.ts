@@ -69,4 +69,18 @@ describe('serveStaticSPA', () => {
     expect(res.status).toBe(200)
     expect(await res.text()).toContain('window.__APP_TOKEN__="tok"')
   })
+
+  test('serves the SPA index for a client route that merely starts with "api"', async () => {
+    serveStaticSPA(app, { dir, token: 'tok' })
+    const res = await app.request('/apiary')
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain('window.__APP_TOKEN__="tok"')
+  })
+
+  test('returns 404 for the bare /api path with no handler', async () => {
+    serveStaticSPA(app, { dir, token: 'tok' })
+    const res = await app.request('/api')
+    expect(res.status).toBe(404)
+    expect(await res.text()).not.toContain('window.__APP_TOKEN__')
+  })
 })

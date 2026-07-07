@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Stage:** executing
+**Stage:** qa
 **Mode:** tasks
 
 **Goal:** Close the gate-scope and network-mode-auth holes in `@tejika/server` (audit H1, H2 + `@tejika/server` mediums/lows) without rewriting the loopback crypto mechanism.

@@ -31,6 +31,16 @@ function closeServer(server: ServerType): () => Promise<void> {
   return () => new Promise<void>((resolve) => server.close(() => resolve()))
 }
 
+function listen(app: Hono, port: number, hostname: string): Promise<ServerType> {
+  return new Promise<ServerType>((resolve, reject) => {
+    const server = serve({ fetch: app.fetch, port, hostname }, () => {
+      server.off('error', reject)
+      resolve(server)
+    })
+    server.once('error', reject)
+  })
+}
+
 /**
  * Create a local HTTP server. In `loopback` mode (default) it binds 127.0.0.1,
  * generates a random bearer token, and gates `/api` with the Host/Origin/token
@@ -71,7 +81,7 @@ export async function createLocalServer(opts: CreateLocalServerOptions): Promise
     }
     app.use('/api', gate)
     app.use('/api/*', gate)
-    const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' })
+    const server = await listen(app, port, '127.0.0.1')
     return { app, url: `http://127.0.0.1:${port}`, token, close: closeServer(server) }
   }
 
@@ -94,7 +104,7 @@ export async function createLocalServer(opts: CreateLocalServerOptions): Promise
   app.use('/api/*', corsMiddleware)
   app.use('/api', authGate)
   app.use('/api/*', authGate)
-  const server = serve({ fetch: app.fetch, port, hostname: '0.0.0.0' })
+  const server = await listen(app, port, '0.0.0.0')
   return { app, url: `http://0.0.0.0:${port}`, close: closeServer(server) }
 }
 

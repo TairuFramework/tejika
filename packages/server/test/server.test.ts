@@ -120,3 +120,17 @@ describe('createLocalServer (network)', () => {
     ).rejects.toThrow(/requires auth/)
   })
 })
+
+describe('createLocalServer (lifecycle)', () => {
+  test('rejects on EADDRINUSE instead of crashing later', async () => {
+    const first = await createLocalServer({ app: 'tejika-test' })
+    const port = Number(new URL(first.url).port)
+    try {
+      await expect(createLocalServer({ app: 'tejika-test', port })).rejects.toMatchObject({
+        code: 'EADDRINUSE',
+      })
+    } finally {
+      await first.close()
+    }
+  })
+})

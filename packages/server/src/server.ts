@@ -52,6 +52,16 @@ export async function createLocalServer(opts: CreateLocalServerOptions): Promise
       `http://localhost:${port}`,
       `http://[::1]:${port}`,
     ])
+    // Global Host gate: the token-bearing SPA index is served at `/` and as the
+    // SPA fallback, so the Host allowlist (the DNS-rebinding defense) must cover
+    // every route, not just `/api`. Host match is case-sensitive by design
+    // (fail-closed: an unexpected-case Host is treated as foreign).
+    const hostGate = async (ctx: Context, next: Next): Promise<Response | undefined> => {
+      const host = ctx.req.raw.headers.get('host')
+      if (host == null || !allowedHosts.has(host)) return ctx.text('Forbidden', 403)
+      await next()
+    }
+    app.use('*', hostGate)
     const gate = async (ctx: Context, next: Next): Promise<Response | undefined> => {
       if (!verifyLoopbackRequest(ctx.req.raw, { allowedHosts, allowedOrigins, token })) {
         return ctx.text('Forbidden', 403)

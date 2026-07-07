@@ -1,5 +1,12 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import { createLocalServer } from '../src/server.js'
+import { serveStaticSPA } from '../src/static.js'
+
+const fixtureDir = mkdtempSync(join(tmpdir(), 'tejika-server-'))
+writeFileSync(join(fixtureDir, 'index.html'), '<head></head><body>app</body>')
 
 let close: (() => Promise<void>) | undefined
 
@@ -34,6 +41,24 @@ describe('createLocalServer (loopback)', () => {
       headers: { host: `127.0.0.1:${port}`, authorization: 'Bearer wrong' },
     })
     expect(wrongToken.status).toBe(403)
+  })
+
+  test('rejects the token-bearing SPA index for a foreign Host (H1)', async () => {
+    const server = await createLocalServer({ app: 'tejika-test' })
+    close = server.close
+    // The consuming app mounts a static SPA on the returned Hono app.
+    serveStaticSPA(server.app, { dir: fixtureDir, token: server.token as string })
+    const port = new URL(server.url).port
+
+    // Good loopback Host: the index (with token) is served.
+    const local = await server.app.request('/', { headers: { host: `127.0.0.1:${port}` } })
+    expect(local.status).toBe(200)
+    expect(await local.text()).toContain('window.__APP_TOKEN__')
+
+    // DNS-rebinding page: foreign Host must never receive the token index.
+    const foreign = await server.app.request('/', { headers: { host: 'evil.example.com' } })
+    expect(foreign.status).toBe(403)
+    expect(await foreign.text()).not.toContain('window.__APP_TOKEN__')
   })
 })
 

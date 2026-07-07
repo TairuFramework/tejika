@@ -58,4 +58,39 @@ describe('verifyLoopbackRequest', () => {
       ),
     ).toBe(false)
   })
+
+  test('allows a request with no Origin header (non-browser client)', () => {
+    expect(
+      verifyLoopbackRequest(
+        req({ host: '127.0.0.1:8080', authorization: 'Bearer secret-token' }),
+        ctx,
+      ),
+    ).toBe(true)
+  })
+
+  test('rejects a lowercase "bearer" scheme', () => {
+    expect(
+      verifyLoopbackRequest(
+        req({ host: '127.0.0.1:8080', authorization: 'bearer secret-token' }),
+        ctx,
+      ),
+    ).toBe(false)
+  })
+
+  test('rejects a missing Authorization header', () => {
+    expect(verifyLoopbackRequest(req({ host: '127.0.0.1:8080' }), ctx)).toBe(false)
+  })
+
+  test('rejects a present but non-allowlisted Origin', () => {
+    expect(
+      verifyLoopbackRequest(
+        req({
+          host: '127.0.0.1:8080',
+          origin: 'http://evil.example',
+          authorization: 'Bearer secret-token',
+        }),
+        ctx,
+      ),
+    ).toBe(false)
+  })
 })

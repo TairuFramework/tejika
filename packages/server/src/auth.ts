@@ -30,6 +30,8 @@ export function buildAllowedHosts(port: number): Set<string> {
  * Origin check (it must still pass the Host and token checks).
  */
 export function verifyLoopbackRequest(request: Request, ctx: GateContext): boolean {
+  // Host match is exact and case-sensitive by design: an unexpected-case Host is
+  // treated as foreign (fail-closed), which is safe for the fixed loopback aliases.
   const host = request.headers.get('host')
   if (host == null || !ctx.allowedHosts.has(host)) return false
 

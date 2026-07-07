@@ -63,6 +63,29 @@ describe('createLocalServer (loopback)', () => {
 })
 
 describe('createLocalServer (network)', () => {
+  test('answers OPTIONS preflight without requiring auth', async () => {
+    const server = await createLocalServer({
+      app: 'tejika-test',
+      bind: 'network',
+      allowedOrigin: 'https://example.com',
+      auth: { mode: 'custom', verify: (req) => req.headers.get('x-key') === 'let-me-in' },
+    })
+    close = server.close
+
+    const preflight = await server.app.request('/api', {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://example.com',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'x-key',
+      },
+    })
+    expect(preflight.status).toBeLessThan(300) // 204/200, not 403
+    expect(preflight.headers.get('access-control-allow-origin')).toBe('https://example.com')
+    expect(preflight.headers.get('access-control-allow-methods')).toContain('POST')
+    expect(preflight.headers.get('access-control-allow-headers')).toContain('x-key')
+  })
+
   test('binds without a token and gates /api via the custom auth hook', async () => {
     const server = await createLocalServer({
       app: 'tejika-test',

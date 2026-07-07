@@ -4,6 +4,7 @@ import type { ProtocolDefinition } from '@enkaku/protocol'
 import { type ServerType, serve } from '@hono/node-server'
 import { getPort } from '@tejika/env'
 import { type Context, Hono, type Next } from 'hono'
+import { cors } from 'hono/cors'
 import { buildAllowedHosts, verifyLoopbackRequest } from './auth.js'
 
 export type AuthConfig = { mode: 'custom'; verify: (req: Request) => boolean }
@@ -82,15 +83,18 @@ export async function createLocalServer(opts: CreateLocalServerOptions): Promise
         'Network mode has no built-in authentication.',
     )
   }
-  const gate = async (ctx: Context, next: Next): Promise<Response | undefined> => {
+  const authGate = async (ctx: Context, next: Next): Promise<Response | undefined> => {
     ctx.header('Access-Control-Allow-Origin', allowedOrigin)
     if (!auth.verify(ctx.req.raw)) {
       return ctx.text('Forbidden', 403)
     }
     await next()
   }
-  app.use('/api', gate)
-  app.use('/api/*', gate)
+  const corsMiddleware = cors({ origin: allowedOrigin })
+  app.use('/api', corsMiddleware)
+  app.use('/api/*', corsMiddleware)
+  app.use('/api', authGate)
+  app.use('/api/*', authGate)
   const server = serve({ fetch: app.fetch, port, hostname: '0.0.0.0' })
   return { app, url: `http://0.0.0.0:${port}`, close: closeServer(server) }
 }

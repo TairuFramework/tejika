@@ -356,9 +356,20 @@ The `getPidPath` rename resolves a pre-existing violation of the repo's "no lowe
 abbreviations" guardrail (`ID` not `Id`). Note `pidPath` as a variable or option name is already
 compliant, since a leading abbreviation in camelCase is all-lowercase.
 
-Sakui consumes `getDaemonStatus`, `stopDaemon`, `spawnDaemon`, and `getPidPath`. All four move,
-and its call sites are updated in the same pass. Mokei's migration is still pending
+Consumers absorb the change when they next bump. Sakui consumes `getDaemonStatus`, `stopDaemon`,
+`spawnDaemon`, and `getPidPath`; all four move, but Sakui lives in its own repo and is out of
+scope for this branch — a backlog item records the migration. Mokei's migration is still pending
 (`docs/agents/plans/next/2026-06-20-mokei-tejika-migration.md`) and absorbs the new API for free.
+
+In-repo, `@tejika/test`'s `waitForDaemonRunning` and `waitForDaemonStopped` call
+`getDaemonStatus` and read `status.running`. Both move to `await` and the `state` union, and
+`waitForDaemonRunning` must now wait for `state === 'running'` — treating `booting` as
+not-yet-running. Its doc comment ("daemons write their pidfile only after their socket accepts
+connections") becomes false under the new claim-before-bind order and is corrected.
+
+The repo has no `.changeset/` directory — changesets arrive with the publishing-readiness item
+(`docs/agents/plans/next/2026-07-06-publishing-readiness.md`). Until then the breaking changes
+are recorded in a new `packages/process/README.md`.
 
 ## Testing
 

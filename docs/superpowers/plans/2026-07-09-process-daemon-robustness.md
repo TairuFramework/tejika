@@ -693,21 +693,27 @@ describe('waitForSocket', () => {
     ).resolves.toBeUndefined()
   })
 
-  test('rejects when the deadline expires', async () => {
+  // The final sleep is `delay(min(interval, remaining()))`, which lands exactly on
+  // the deadline — so the abort and the timer fire in the same tick and the abort
+  // usually wins the race. Without the catch in `waitForSocket`, this test sees an
+  // AbortError instead of the timeout, ~85% of runs. Run it a few times.
+  test('rejects with the timeout error, not an AbortError, when the budget expires', async () => {
     await expect(
       waitForSocket(socketPath, { deadline: createDeadline(60), interval: 10 }),
     ).rejects.toThrow(/Timed out waiting for socket/)
   })
 
-  test('rejects when the caller aborts mid-wait', async () => {
+  test('propagates the caller AbortError, rather than reporting a timeout', async () => {
     const controller = new AbortController()
     setTimeout(() => controller.abort(), 20)
-    await expect(
-      waitForSocket(socketPath, {
-        deadline: createDeadline(5000, controller.signal),
-        interval: 10,
-      }),
-    ).rejects.toThrow()
+    // A generous budget, so `remaining() > 0` when the caller's signal fires.
+    const promise = waitForSocket(socketPath, {
+      deadline: createDeadline(5000, controller.signal),
+      interval: 10,
+    })
+    await expect(promise).rejects.toThrow()
+    await expect(promise).rejects.not.toThrow(/Timed out waiting for socket/)
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
   })
 })
 ```
@@ -790,7 +796,12 @@ export async function isSocketLive(socketPath: string): Promise<boolean> {
 
 export type WaitForSocketOptions = { deadline?: Deadline; interval?: number }
 
-/** Poll until the socket accepts a connection, or reject once the deadline expires. */
+/**
+ * Poll until the socket accepts a connection. Two distinct failures:
+ * budget exhausted rejects with the timeout `Error`; a caller abort propagates
+ * the original `AbortError` untouched, so callers can tell "I cancelled this"
+ * from "the daemon never came up".
+ */
 export async function waitForSocket(
   socketPath: string,
   options: WaitForSocketOptions = {},
@@ -800,8 +811,16 @@ export async function waitForSocket(
   for (;;) {
     if (await isSocketLive(socketPath)) return
     if (deadline.expired()) throw new Error(`Timed out waiting for socket ${socketPath}`)
-    // Rejects with an AbortError if the deadline's signal fires mid-sleep.
-    await delay(Math.min(interval, deadline.remaining()), undefined, { signal: deadline.signal })
+    try {
+      await delay(Math.min(interval, deadline.remaining()), undefined, { signal: deadline.signal })
+    } catch (err) {
+      // The signal fired mid-sleep. The final sleep lands exactly on the deadline,
+      // so the timer and any caller abort race in the same tick and delay() rejects
+      // with an AbortError either way — remaining() is the arbiter, not the error.
+      // Zero budget left is a timeout; anything else is the caller cancelling us.
+      if (deadline.remaining() === 0) throw new Error(`Timed out waiting for socket ${socketPath}`)
+      throw err
+    }
   }
 }
 

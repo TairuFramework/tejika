@@ -569,7 +569,7 @@ git commit -m "feat(process): add exclusive daemon lock with a JSON record"
 **Interfaces:**
 - Consumes: nothing.
 - Produces:
-  - `type Deadline = { remaining(): number; expired(): boolean; signal: AbortSignal }`
+  - `type Deadline = { remaining(): number; expired(): boolean; timedOut(): boolean; signal: AbortSignal }`
   - `function createDeadline(timeoutMs?: number, signal?: AbortSignal): Deadline`
   - `type SocketProbe = 'live' | 'dead' | 'forbidden'`
   - `function probeSocket(socketPath: string): Promise<SocketProbe>`
@@ -581,6 +581,8 @@ git commit -m "feat(process): add exclusive daemon lock with a JSON record"
 `EACCES` and `EPERM` from `connectSocket` mean *something is listening* and we merely lack permission. They must not count as dead, because a dead verdict authorises unlinking the socket file.
 
 `createDeadline()` with no arguments yields `remaining() === Infinity`, `expired() === false`, and a never-aborting signal.
+
+`expired()` and `timedOut()` differ deliberately. `expired()` is true whenever the combined signal has aborted **or** the budget is gone — "stop waiting, for whatever reason". `timedOut()` is true **only** when the time budget itself ran out — it checks the internal timeout signal's own `aborted` state, not the millisecond `remaining()` proxy, and stays false when a caller's `AbortSignal` is what aborted. That distinction is the arbiter `waitForSocket` uses to decide between throwing its timeout `Error` and propagating the caller's `AbortError`; `remaining() === 0` is unreliable at the exact deadline tick because `Date.now()` is millisecond-grained while `AbortSignal.timeout` fires on a real timer.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -628,6 +630,23 @@ describe('createDeadline', () => {
     expect(deadline.expired()).toBe(false)
     controller.abort()
     expect(deadline.expired()).toBe(true)
+  })
+
+  test('timedOut is true only when the time budget ran out, not on a caller abort', () => {
+    const controller = new AbortController()
+    const deadline = createDeadline(10_000, controller.signal)
+    expect(deadline.timedOut()).toBe(false)
+    controller.abort()
+    // The deadline is now expired — but the *caller* aborted it, not the clock.
+    expect(deadline.expired()).toBe(true)
+    expect(deadline.timedOut()).toBe(false)
+  })
+
+  test('timedOut is true once the timer fires', async () => {
+    const deadline = createDeadline(50)
+    expect(deadline.timedOut()).toBe(false)
+    await delay(80)
+    expect(deadline.timedOut()).toBe(true)
   })
 })
 ```
@@ -715,6 +734,20 @@ describe('waitForSocket', () => {
     await expect(promise).rejects.not.toThrow(/Timed out waiting for socket/)
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
   })
+
+  // Deterministic sibling of the case above: the caller aborts DURING the probe
+  // (an already-aborted signal), not during the sleep. On the first iteration the
+  // top-of-loop guard sees the deadline aborted with budget still left. It must
+  // NOT report a timeout — a guard keyed on `expired()` would; `timedOut()` does
+  // not. No timing race, so this fails hard if the guard uses the wrong predicate.
+  test('a caller abort during the probe propagates AbortError, never a timeout', async () => {
+    const promise = waitForSocket(socketPath, {
+      deadline: createDeadline(5000, AbortSignal.abort()),
+      interval: 10,
+    })
+    await expect(promise).rejects.not.toThrow(/Timed out waiting for socket/)
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+  })
 })
 ```
 
@@ -732,7 +765,16 @@ Create `packages/process/src/deadline.ts`:
 export type Deadline = {
   /** Milliseconds left, or `Infinity` when unbounded. Never negative. */
   remaining(): number
+  /** True once we should stop waiting — the budget is gone OR a caller aborted. */
   expired(): boolean
+  /**
+   * True ONLY when the time budget itself ran out, never for a caller abort.
+   * Reads the timeout signal's own `aborted` state, not the `remaining()`
+   * millisecond proxy, so it is exact at the deadline tick. This is the arbiter
+   * that lets a waiter throw a timeout for budget exhaustion yet propagate the
+   * caller's `AbortError` for a cancellation.
+   */
+  timedOut(): boolean
   signal: AbortSignal
 }
 
@@ -742,9 +784,10 @@ export type Deadline = {
  * imposing its own independent timeout.
  */
 export function createDeadline(timeoutMs?: number, signal?: AbortSignal): Deadline {
+  const timeout = timeoutMs != null ? AbortSignal.timeout(timeoutMs) : null
   const signals: Array<AbortSignal> = []
   if (signal != null) signals.push(signal)
-  if (timeoutMs != null) signals.push(AbortSignal.timeout(timeoutMs))
+  if (timeout != null) signals.push(timeout)
 
   // AbortSignal.any([]) is never aborted, which is exactly the unbounded case.
   const combined = AbortSignal.any(signals)
@@ -756,6 +799,9 @@ export function createDeadline(timeoutMs?: number, signal?: AbortSignal): Deadli
   return {
     remaining,
     expired: (): boolean => combined.aborted || remaining() === 0,
+    // `timeout.aborted` is the ground truth for "the clock ran out"; the
+    // `remaining() === 0` disjunct only covers a caller reading it a hair early.
+    timedOut: (): boolean => (timeout?.aborted ?? false) || remaining() === 0,
     signal: combined,
   }
 }
@@ -810,15 +856,19 @@ export async function waitForSocket(
   const interval = options.interval ?? 50
   for (;;) {
     if (await isSocketLive(socketPath)) return
-    if (deadline.expired()) throw new Error(`Timed out waiting for socket ${socketPath}`)
+    // Only the clock running out is a timeout here. A caller abort that lands
+    // during the probe falls through to the sleep below, where delay() rejects
+    // immediately against the already-aborted signal and the catch rethrows it.
+    if (deadline.timedOut()) throw new Error(`Timed out waiting for socket ${socketPath}`)
     try {
       await delay(Math.min(interval, deadline.remaining()), undefined, { signal: deadline.signal })
     } catch (err) {
       // The signal fired mid-sleep. The final sleep lands exactly on the deadline,
       // so the timer and any caller abort race in the same tick and delay() rejects
-      // with an AbortError either way — remaining() is the arbiter, not the error.
-      // Zero budget left is a timeout; anything else is the caller cancelling us.
-      if (deadline.remaining() === 0) throw new Error(`Timed out waiting for socket ${socketPath}`)
+      // with an AbortError either way. timedOut() reads the timeout signal directly
+      // — exact at the tick — so budget exhaustion becomes the timeout Error while a
+      // caller cancellation keeps its own AbortError.
+      if (deadline.timedOut()) throw new Error(`Timed out waiting for socket ${socketPath}`)
       throw err
     }
   }
@@ -837,7 +887,7 @@ export function safeRemove(socketPath: string): void {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd packages/process && pnpm exec vitest run test/deadline.test.ts test/socket.test.ts`
-Expected: PASS, 5 + 7 tests.
+Expected: PASS, 7 + 8 tests.
 
 - [ ] **Step 5: Lint and commit**
 

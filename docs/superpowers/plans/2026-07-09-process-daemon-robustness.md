@@ -547,7 +547,7 @@ export function claimDaemonLock(pidPath: string, record: LockRecord): ClaimResul
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd packages/process && pnpm exec vitest run test/lock.test.ts`
-Expected: PASS, 13 tests.
+Expected: PASS, 16 tests.
 
 - [ ] **Step 5: Lint and commit**
 

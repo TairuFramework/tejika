@@ -44,15 +44,19 @@ export async function waitForSocket(
   const interval = options.interval ?? 50
   for (;;) {
     if (await isSocketLive(socketPath)) return
-    if (deadline.expired()) throw new Error(`Timed out waiting for socket ${socketPath}`)
+    // Only the clock running out is a timeout here. A caller abort that lands
+    // during the probe falls through to the sleep below, where delay() rejects
+    // immediately against the already-aborted signal and the catch rethrows it.
+    if (deadline.timedOut()) throw new Error(`Timed out waiting for socket ${socketPath}`)
     try {
       await delay(Math.min(interval, deadline.remaining()), undefined, { signal: deadline.signal })
     } catch (err) {
       // The signal fired mid-sleep. The final sleep lands exactly on the deadline,
       // so the timer and any caller abort race in the same tick and delay() rejects
-      // with an AbortError either way — remaining() is the arbiter, not the error.
-      // Zero budget left is a timeout; anything else is the caller cancelling us.
-      if (deadline.remaining() === 0) throw new Error(`Timed out waiting for socket ${socketPath}`)
+      // with an AbortError either way. timedOut() reads the timeout signal directly
+      // — exact at the tick — so budget exhaustion becomes the timeout Error while a
+      // caller cancellation keeps its own AbortError.
+      if (deadline.timedOut()) throw new Error(`Timed out waiting for socket ${socketPath}`)
       throw err
     }
   }

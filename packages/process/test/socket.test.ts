@@ -78,4 +78,18 @@ describe('waitForSocket', () => {
     await expect(promise).rejects.not.toThrow(/Timed out waiting for socket/)
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
   })
+
+  // Deterministic sibling of the case above: the caller aborts DURING the probe
+  // (an already-aborted signal), not during the sleep. On the first iteration the
+  // top-of-loop guard sees the deadline aborted with budget still left. It must
+  // NOT report a timeout — a guard keyed on `expired()` would; `timedOut()` does
+  // not. No timing race, so this fails hard if the guard uses the wrong predicate.
+  test('a caller abort during the probe propagates AbortError, never a timeout', async () => {
+    const promise = waitForSocket(socketPath, {
+      deadline: createDeadline(5000, AbortSignal.abort()),
+      interval: 10,
+    })
+    await expect(promise).rejects.not.toThrow(/Timed out waiting for socket/)
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+  })
 })

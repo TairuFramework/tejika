@@ -40,4 +40,21 @@ describe('createDeadline', () => {
     controller.abort()
     expect(deadline.expired()).toBe(true)
   })
+
+  test('timedOut is true only when the time budget ran out, not on a caller abort', () => {
+    const controller = new AbortController()
+    const deadline = createDeadline(10_000, controller.signal)
+    expect(deadline.timedOut()).toBe(false)
+    controller.abort()
+    // The deadline is now expired — but the *caller* aborted it, not the clock.
+    expect(deadline.expired()).toBe(true)
+    expect(deadline.timedOut()).toBe(false)
+  })
+
+  test('timedOut is true once the timer fires', async () => {
+    const deadline = createDeadline(50)
+    expect(deadline.timedOut()).toBe(false)
+    await delay(80)
+    expect(deadline.timedOut()).toBe(true)
+  })
 })

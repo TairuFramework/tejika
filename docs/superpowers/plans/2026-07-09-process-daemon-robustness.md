@@ -259,14 +259,16 @@ git commit -m "feat(process): add typed daemon errors"
 - Produces:
   - `type LockRecord = { pid: number; socketPath: string; startedAt: number; ready: boolean }`
   - `type DaemonLock = { record: LockRecord; markReady(): void; release(): void }`
-  - `type ClaimResult = { lock: DaemonLock } | { conflict: LockRecord | null }`
+  - `type ClaimResult = { lock: DaemonLock } | { conflict: LockRecord | null; inode: number | null }`
   - `function claimDaemonLock(pidPath: string, record: LockRecord): ClaimResult`
   - `function readLockRecord(pidPath: string): LockRecord | null`
   - `function reapLockFile(pidPath: string, expectedInode?: number): boolean`
 
 `readLockRecord` returns `null` for a missing, unreadable, malformed, or non-conforming file — a corrupt record is indistinguishable from no record. Callers treat the two alike: no live daemon is recorded, so the lock is free to reclaim. (Task 5 classifies a `null` record as `not-running`, not `stale` — `stale` carries the pid of a process that once held the lock, and a corrupt record has no trustworthy pid to carry.) That is the `NaN`-pid fix.
 
-`reapLockFile` unlinks only while the file's inode still matches `expectedInode` (captured now when omitted). This narrows, but does not close, the window in which two reapers both delete a lockfile a third process has since freshly claimed. Task 6's `markReady` rewrite and its live-socket check close what remains.
+The conflict branch returns the **inode observed at the moment of conflict** alongside the record, because the caller (Task 6) decides whether to reap only *after* an `await classifyRecord`. Handing the caller the inode lets it pass it to `reapLockFile` so the reap no-ops if a racer reclaimed the lockfile across that await — without it, the caller would re-`stat` a file that may already be a racer's fresh claim and delete it, recreating the split-brain one layer down at the lockfile. `inode` is `null` when the conflicting file vanished between the failed `O_EXCL` open and the stat (a racer reaped it first); the caller then simply retries the claim rather than reaping.
+
+`reapLockFile` unlinks only while the file's inode still matches `expectedInode` (captured now when omitted — but callers racing a reclaim MUST pass the inode captured at conflict time, never rely on the omitted-capture form). This narrows the window in which two reapers both delete a lockfile a third process has since freshly claimed down to the two adjacent syscalls inside `claimDaemonLock`; Task 6's `markReady` rewrite and its live-socket check contain what remains.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -306,17 +308,19 @@ describe('claimDaemonLock', () => {
     expect(readLockRecord(pidPath)).toEqual(record())
   })
 
-  test('a second claim on a held path returns the existing record as a conflict', () => {
+  test('a second claim on a held path returns the existing record and its inode', () => {
     claimDaemonLock(pidPath, record({ pid: 111 }))
+    const inode = statSync(pidPath).ino
     const second = claimDaemonLock(pidPath, record({ pid: 222 }))
-    expect(second).toEqual({ conflict: record({ pid: 111 }) })
+    expect(second).toEqual({ conflict: record({ pid: 111 }), inode })
     // The loser must not have overwritten the winner's record.
     expect(readLockRecord(pidPath)?.pid).toBe(111)
   })
 
-  test('a corrupt existing file conflicts with a null record', () => {
+  test('a corrupt existing file conflicts with a null record but still reports its inode', () => {
     writeFileSync(pidPath, 'not json at all', 'utf8')
-    expect(claimDaemonLock(pidPath, record())).toEqual({ conflict: null })
+    const inode = statSync(pidPath).ino
+    expect(claimDaemonLock(pidPath, record())).toEqual({ conflict: null, inode })
   })
 })
 
@@ -445,7 +449,9 @@ export type DaemonLock = {
   release(): void
 }
 
-export type ClaimResult = { lock: DaemonLock } | { conflict: LockRecord | null }
+export type ClaimResult =
+  | { lock: DaemonLock }
+  | { conflict: LockRecord | null; inode: number | null }
 
 function isLockRecord(value: unknown): value is LockRecord {
   if (typeof value !== 'object' || value === null) return false
@@ -519,7 +525,10 @@ export function claimDaemonLock(pidPath: string, record: LockRecord): ClaimResul
     fd = openSync(pidPath, 'wx')
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
-    return { conflict: readLockRecord(pidPath) }
+    // Capture the record and the inode together, so a caller reaping after an
+    // await can detect a racer that reclaimed the file in the meantime. The two
+    // syscalls are adjacent — the residual window this design accepts.
+    return { conflict: readLockRecord(pidPath), inode: inodeOf(pidPath) }
   }
   closeSync(fd)
   writeRecord(pidPath, record)
@@ -1230,13 +1239,17 @@ Expected: PASS, 9 tests.
 
 `daemon.test.ts` still references the old `getDaemonStatus` shape and will fail to typecheck. Delete its single `describe('getDaemonStatus', ...)` block now; Task 6 replaces the file.
 
-- [ ] **Step 5: Lint and commit**
+- [ ] **Step 5: Lint and stage — do NOT commit yet**
+
+This task's async `getDaemonStatus` leaves `daemon.ts` non-compiling until Task
+6, and the repo's pre-commit hook runs `build:types` over `src/`. So Tasks 5, 6,
+and 7 stage their work and land as one green commit at the end of Task 7 (see
+Task 7's "Commit grouping" note). Lint and stage only:
 
 ```bash
 pnpm exec biome check --write ./packages
 git add packages/process/src/status.ts packages/process/test/status.test.ts \
   packages/process/test/daemon.test.ts
-git commit -m "feat(process)!: pure async daemon status with an ESRCH/EPERM split"
 ```
 
 ---
@@ -1291,6 +1304,7 @@ import { DaemonAlreadyRunningError } from '../src/errors.js'
 import { readLockRecord } from '../src/lock.js'
 import { isSocketLive } from '../src/socket.js'
 import type { PingProtocol } from './fixtures/protocol.js'
+import { createServer as createNetServer } from 'node:net'
 
 const APP = 'tejika-test'
 
@@ -1376,6 +1390,36 @@ describe('runDaemon', () => {
     writeFileSync(socketPath, '', 'utf8')
     await expect(boot()).resolves.toBeDefined()
     await expect(isSocketLive(socketPath)).resolves.toBe(true)
+  })
+
+  test('refuses a live socket held with no lockfile, without unlinking it', async () => {
+    // A foreign listener owns the socket and there is no lockfile — so we win the
+    // O_EXCL claim, but the live socket is not ours to steal. We must release the
+    // lock and leave the socket alone.
+    const foreign = createNetServer()
+    await new Promise<void>((resolve) => foreign.listen(socketPath, resolve))
+    try {
+      await expect(boot()).rejects.toBeInstanceOf(DaemonAlreadyRunningError)
+      await expect(isSocketLive(socketPath)).resolves.toBe(true)
+      // The lock must have been released on the failed boot, not leaked.
+      expect(readLockRecord(pidPath)).toBeNull()
+    } finally {
+      await new Promise<void>((resolve) => foreign.close(() => resolve()))
+    }
+  })
+})
+
+describe('signal handling', () => {
+  test('installs SIGTERM/SIGINT handlers when handleSignals is true and removes them on close', async () => {
+    const beforeTerm = process.listenerCount('SIGTERM')
+    const beforeInt = process.listenerCount('SIGINT')
+    const handle = await boot({ handleSignals: true })
+    expect(process.listenerCount('SIGTERM')).toBe(beforeTerm + 1)
+    expect(process.listenerCount('SIGINT')).toBe(beforeInt + 1)
+    await handle.close()
+    // No listener may leak across daemons living in one process.
+    expect(process.listenerCount('SIGTERM')).toBe(beforeTerm)
+    expect(process.listenerCount('SIGINT')).toBe(beforeInt)
   })
 })
 
@@ -1567,10 +1611,14 @@ async function claimOrThrow(
     if (status.state !== 'stale' && status.state !== 'not-running') {
       throw new DaemonAlreadyRunningError(status.pid, socketPath)
     }
-    // Stale (or corrupt): reap and retry. The reap is inode-guarded; a racer who
-    // claims between our read and our reap is protected by its own markReady
-    // rewrite plus the live-socket check below.
-    reapLockFile(pidPath)
+    // Stale (or corrupt): reap and retry, but reap ONLY the exact file we
+    // classified. `result.inode` was captured when the conflict was read; passing
+    // it makes `reapLockFile` no-op if a racer reclaimed the lockfile across the
+    // await above — we then loop, re-read the racer's fresh record, and either
+    // win the next claim or throw DaemonAlreadyRunningError against it. Reaping
+    // without the inode would delete the racer's live claim and split-brain one
+    // layer down. A null inode means the file already vanished; just retry.
+    if (result.inode != null) reapLockFile(pidPath, result.inode)
   }
   throw new DaemonAlreadyRunningError(readLockRecord(pidPath)?.pid ?? -1, socketPath)
 }
@@ -1625,16 +1673,6 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
 
   const lock = await claimOrThrow(pidPath, socketPath, opts.bootGraceMs ?? DEFAULT_BOOT_GRACE_MS)
 
-  if (existsSync(socketPath)) {
-    if (await isSocketLive(socketPath)) {
-      // A foreign daemon holds the socket without a lockfile. We hold the lock,
-      // but its socket is not ours to steal.
-      lock.release()
-      throw new DaemonAlreadyRunningError(-1, socketPath)
-    }
-    safeRemove(socketPath)
-  }
-
   const connections = new Set<Socket>()
   const server = createServer((socket) => {
     connections.add(socket)
@@ -1654,13 +1692,33 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     }
   })
 
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(socketPath, () => {
-      chmodSync(socketPath, 0o600)
-      resolve()
+  // Everything from the socket cleanup through the bind runs under the claimed
+  // lock. If any of it throws — a foreign daemon on the socket, an EADDRINUSE
+  // from a lost lockfile race, an EACCES on bind — we must release the lock: no
+  // handle was returned, so the caller has no other way to free it, and a leaked
+  // `ready: false` record blocks legitimate boots until bootGraceMs elapses.
+  try {
+    if (existsSync(socketPath)) {
+      if (await isSocketLive(socketPath)) {
+        // A foreign daemon holds the socket without a lockfile. We hold the lock,
+        // but its socket is not ours to steal.
+        throw new DaemonAlreadyRunningError(-1, socketPath)
+      }
+      safeRemove(socketPath)
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(socketPath, () => {
+        chmodSync(socketPath, 0o600)
+        resolve()
+      })
     })
-  })
+  } catch (err) {
+    server.close(() => {})
+    lock.release()
+    throw err
+  }
   // The boot promise has settled; its `reject` would be a no-op for later errors.
   server.removeAllListeners('error')
   server.on('error', (err) => opts.onError?.(err))
@@ -1717,17 +1775,20 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd packages/process && pnpm exec vitest run test/daemon.test.ts`
-Expected: PASS, 14 tests.
+Expected: PASS, 17 tests.
 
 The concurrent-boot test is the acceptance criterion for H3. If it is flaky, the claim loop is wrong — fix the loop, do not add retries to the test.
 
-- [ ] **Step 5: Lint and commit**
+- [ ] **Step 5: Lint and stage — do NOT commit yet**
+
+`daemon.ts` no longer exports `spawnDaemon` (it moves to `spawn.ts` in Task 7),
+so `controller.ts` and `index.ts` do not compile until Task 7 repoints them. Stay
+staged; Task 7 makes the single combined commit for Tasks 5–7:
 
 ```bash
 pnpm exec biome check --write ./packages
 git add packages/process/src/daemon.ts packages/process/test/daemon.test.ts \
   packages/process/test/fixtures/protocol.ts
-git commit -m "feat(process)!: close the split-brain boot race with an exclusive claim"
 ```
 
 ---
@@ -1739,6 +1800,30 @@ git commit -m "feat(process)!: close the split-brain boot race with an exclusive
 - Create: `packages/process/test/spawn.test.ts`
 - Create: `packages/process/test/fixtures/crash-entry.ts`
 - Replace: `packages/process/test/fixtures/daemon-entry.ts`
+- Modify: `packages/process/src/controller.ts:7` (import `spawnDaemon` from `./spawn.js`, not `./daemon.js`)
+- Modify: `packages/process/src/index.ts:3` (export `spawnDaemon` from `./spawn.js`)
+- Modify: `packages/test/src/daemon.ts` (async rewrite of `waitForDaemonRunning`/`waitForDaemonStopped` — pulled forward from Task 11; see below)
+
+**Commit grouping — why this lands with Tasks 5 and 6.** The repo's pre-commit
+hook runs `pnpm run -r build:types` — a full type build across **every**
+workspace package (test files are excluded per package by the `tsconfig`
+`include`, but all packages' `src/` are checked). The ripple from Task 5's async
+`getDaemonStatus` crosses a package boundary:
+
+- Task 5 makes `getDaemonStatus` async, breaking `packages/process/src/daemon.ts`.
+- Task 6 rewrites `daemon.ts` but removes `spawnDaemon`, breaking the
+  `controller.ts:7` and `index.ts:3` imports.
+- This task creates `spawn.ts` and repoints those two imports — but that unblocks
+  the build far enough to reach `packages/test/src/daemon.ts`, whose
+  `waitForDaemonRunning`/`waitForDaemonStopped` call the old **synchronous**
+  `getDaemonStatus(...).running`. That file must compile too.
+
+So the minimal green unit is Tasks 5 + 6 + 7 **plus** the `packages/test/src/daemon.ts`
+async rewrite (the `src` half of Task 11 — its test-file updates stay in Task 11,
+since test files are not type-built). All of it lands as one commit here, each
+piece reviewed as a separate diff beforehand. (The `index.ts:3` edit is minimal;
+Task 10 finalizes the full export set. `packages/test/src/daemon.ts`'s rewrite
+is given verbatim in Task 11 Step 3 — apply that exact code.)
 
 **Interfaces:**
 - Consumes: `DaemonBootError` (Task 2); `Deadline`, `createDeadline`, `waitForSocket` (Task 4).
@@ -1943,14 +2028,62 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
 Run: `cd packages/process && pnpm exec vitest run test/spawn.test.ts`
 Expected: PASS, 2 tests. The crash test must finish well under 10s — that is the acceptance criterion for the boot-crash finding.
 
-- [ ] **Step 5: Lint and commit**
+- [ ] **Step 5: Repoint the two moved imports**
+
+`spawnDaemon` now lives in `spawn.ts`, so update the two `src/` sites that still
+import it from `daemon.js` — this is what restores `build:types` to green.
+
+In `packages/process/src/controller.ts`, line 7:
+
+```ts
+import { spawnDaemon } from './spawn.js'
+```
+
+In `packages/process/src/index.ts`, line 3 becomes two lines:
+
+```ts
+export { runDaemon } from './daemon.js'
+export { spawnDaemon } from './spawn.js'
+```
+
+- [ ] **Step 6: Verify the tree typechecks, then lint and make the combined commit**
+
+First apply the `packages/test/src/daemon.ts` async rewrite from **Task 11 Step 3**
+(the two function bodies and the corrected doc comment) — it is the last piece the
+recursive `build:types` needs. Then confirm the whole workspace is green:
+
+Run: `rtk proxy pnpm build:types`
+Expected: PASS across **all** packages — including `packages/test`. If `packages/test`
+still fails, the `packages/test/src/daemon.ts` rewrite is missing or wrong; fix it,
+do not `--no-verify`.
+
+Then land Tasks 5, 6, 7 and the test-package `src` rewrite as one commit (the
+pre-commit hook re-runs `build:types -r` and must pass):
 
 ```bash
 pnpm exec biome check --write ./packages
-git add packages/process/src/spawn.ts packages/process/test/spawn.test.ts \
+git add packages/process/src/status.ts packages/process/src/daemon.ts \
+  packages/process/src/spawn.ts packages/process/src/controller.ts \
+  packages/process/src/index.ts packages/process/src/lock.ts \
+  packages/test/src/daemon.ts \
+  packages/process/test/status.test.ts packages/process/test/daemon.test.ts \
+  packages/process/test/lock.test.ts \
+  packages/process/test/spawn.test.ts packages/process/test/fixtures/protocol.ts \
   packages/process/test/fixtures/crash-entry.ts packages/process/test/fixtures/daemon-entry.ts
-git commit -m "feat(process): surface daemon boot crashes instead of timing out"
+git commit -m "feat(process)!: claim-before-bind daemon boot, pure async status, boot-crash surfacing
+
+Closes the split-brain boot race (H3): the pidfile becomes an exclusive
+O_EXCL claim taken before the socket binds, and the reap that reclaims a
+stale lockfile is guarded by the inode observed at conflict time so a racer's
+fresh claim is never deleted. Status classification is now pure and async,
+splitting ESRCH (stale) from EPERM (running, not owned) and cross-checking the
+socket to catch PID recycling. spawnDaemon moves to spawn.ts and races the
+child against the socket wait so a boot crash surfaces immediately instead of
+timing out. @tejika/test's daemon-wait helpers move to the async status API."
 ```
+
+The `git add` list now also includes `lock.ts`/`lock.test.ts` (the inode fix from
+Task 6's review) and `packages/test/src/daemon.ts` (pulled from Task 11).
 
 ---
 
@@ -2576,8 +2709,16 @@ git commit -m "feat(process)!: publish the new daemon surface"
 
 ### Task 11: Update `@tejika/test` for the async status union
 
+> **`packages/test/src/daemon.ts` already landed in the Task 5–7 combined commit.**
+> The recursive `build:types` in the pre-commit hook forced the `src` rewrite to
+> ship with Task 7 (see Task 7's "Commit grouping" note). Step 3 below is therefore
+> already done on the branch — this task **verifies** it is present and correct and
+> then completes the remaining **test-file** updates (which are not type-built and
+> so did not block the earlier commit). If `src/daemon.ts` is not yet async when you
+> start, apply Step 3; otherwise skip it.
+
 **Files:**
-- Modify: `packages/test/src/daemon.ts`
+- Modify: `packages/test/src/daemon.ts` *(already applied in the combined commit; verify)*
 - Modify: `packages/test/test/daemon.test.ts`
 - Modify: `packages/test/test/daemon-lifecycle.integration.test.ts:5,19,33,35`
 - Modify: `packages/test/test/fixtures/daemon-entry.js:2,7`

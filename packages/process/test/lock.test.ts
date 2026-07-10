@@ -31,17 +31,19 @@ describe('claimDaemonLock', () => {
     expect(readLockRecord(pidPath)).toEqual(record())
   })
 
-  test('a second claim on a held path returns the existing record as a conflict', () => {
+  test('a second claim on a held path returns the existing record and its inode', () => {
     claimDaemonLock(pidPath, record({ pid: 111 }))
+    const inode = statSync(pidPath).ino
     const second = claimDaemonLock(pidPath, record({ pid: 222 }))
-    expect(second).toEqual({ conflict: record({ pid: 111 }) })
+    expect(second).toEqual({ conflict: record({ pid: 111 }), inode })
     // The loser must not have overwritten the winner's record.
     expect(readLockRecord(pidPath)?.pid).toBe(111)
   })
 
-  test('a corrupt existing file conflicts with a null record', () => {
+  test('a corrupt existing file conflicts with a null record but still reports its inode', () => {
     writeFileSync(pidPath, 'not json at all', 'utf8')
-    expect(claimDaemonLock(pidPath, record())).toEqual({ conflict: null })
+    const inode = statSync(pidPath).ino
+    expect(claimDaemonLock(pidPath, record())).toEqual({ conflict: null, inode })
   })
 })
 

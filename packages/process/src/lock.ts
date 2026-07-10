@@ -20,7 +20,9 @@ export type DaemonLock = {
   release(): void
 }
 
-export type ClaimResult = { lock: DaemonLock } | { conflict: LockRecord | null }
+export type ClaimResult =
+  | { lock: DaemonLock }
+  | { conflict: LockRecord | null; inode: number | null }
 
 function isLockRecord(value: unknown): value is LockRecord {
   if (typeof value !== 'object' || value === null) return false
@@ -94,7 +96,10 @@ export function claimDaemonLock(pidPath: string, record: LockRecord): ClaimResul
     fd = openSync(pidPath, 'wx')
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
-    return { conflict: readLockRecord(pidPath) }
+    // Capture the record and the inode together, so a caller reaping after an
+    // await can detect a racer that reclaimed the file in the meantime. The two
+    // syscalls are adjacent — the residual window this design accepts.
+    return { conflict: readLockRecord(pidPath), inode: inodeOf(pidPath) }
   }
   closeSync(fd)
   writeRecord(pidPath, record)

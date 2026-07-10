@@ -1,4 +1,5 @@
 export { createDaemonClient } from './client.js'
 export { ensureDaemon } from './controller.js'
-export { runDaemon, spawnDaemon } from './daemon.js'
+export { runDaemon } from './daemon.js'
+export { spawnDaemon } from './spawn.js'
 export { type DaemonStatus, getDaemonStatus, stopDaemon } from './status.js'

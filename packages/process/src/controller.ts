@@ -4,8 +4,8 @@ import type { Client } from '@enkaku/client'
 import type { ProtocolDefinition } from '@enkaku/protocol'
 import { getSocketPath } from '@tejika/env'
 import { createDaemonClient } from './client.js'
-import { spawnDaemon } from './daemon.js'
 import { safeRemove } from './socket.js'
+import { spawnDaemon } from './spawn.js'
 
 export type EnsureDaemonOptions = {
   app: string

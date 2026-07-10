@@ -264,7 +264,7 @@ git commit -m "feat(process): add typed daemon errors"
   - `function readLockRecord(pidPath: string): LockRecord | null`
   - `function reapLockFile(pidPath: string, expectedInode?: number): boolean`
 
-`readLockRecord` returns `null` for a missing, unreadable, malformed, or non-conforming file — a corrupt record is indistinguishable from no record, and both are treated as stale by callers. That is the `NaN`-pid fix.
+`readLockRecord` returns `null` for a missing, unreadable, malformed, or non-conforming file — a corrupt record is indistinguishable from no record. Callers treat the two alike: no live daemon is recorded, so the lock is free to reclaim. (Task 5 classifies a `null` record as `not-running`, not `stale` — `stale` carries the pid of a process that once held the lock, and a corrupt record has no trustworthy pid to carry.) That is the `NaN`-pid fix.
 
 `reapLockFile` unlinks only while the file's inode still matches `expectedInode` (captured now when omitted). This narrows, but does not close, the window in which two reapers both delete a lockfile a third process has since freshly claimed. Task 6's `markReady` rewrite and its live-socket check close what remains.
 
@@ -852,7 +852,7 @@ git commit -m "feat(process): add deadline budget and tri-state socket probe"
 
 `classifyRecord` takes `kill` and `probe` as injected dependencies. That is the only way to test `EPERM` and PID recycling without a second user account or a genuinely recycled PID.
 
-`getDaemonStatus` is now **pure**: it never reaps the pidfile. Reaping happens only in Task 6's claim path, where it is inode-guarded. That change alone stops a live daemon's lockfile being reaped when `kill` reports `EPERM`.
+`getDaemonStatus` is now **pure**: it never reaps the pidfile. Reaping is confined to the paths that have already decided to act on the daemon — Task 6's inode-guarded claim, and `stopDaemon` below, which reaps only after the process it named is confirmed gone. An observer never mutates. That change alone stops a live daemon's lockfile being reaped when `kill` reports `EPERM`.
 
 - [ ] **Step 1: Write the failing test**
 

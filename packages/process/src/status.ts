@@ -1,10 +1,10 @@
 import { readFileSync, rmSync } from 'node:fs'
-import { getPidPath } from '@tejika/env'
+import { getPIDPath } from '@tejika/env'
 
 export type DaemonStatus = { running: boolean; pid?: number; stale: boolean }
 
 export function getDaemonStatus(opts: { app: string; pidPath?: string }): DaemonStatus {
-  const pidPath = opts.pidPath ?? getPidPath(opts.app)
+  const pidPath = opts.pidPath ?? getPIDPath(opts.app)
   let pid: number
   try {
     pid = Number.parseInt(readFileSync(pidPath, 'utf8').trim(), 10)

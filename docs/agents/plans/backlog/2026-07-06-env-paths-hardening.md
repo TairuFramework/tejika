@@ -6,14 +6,6 @@ out into `next/2026-07-06-port-and-cli-option-validation.md`)
 conventions violation found repo-wide).
 **Where:** `packages/env/src/paths.ts`, `packages/env/src/ports.ts`, `packages/env/test/`; rename ripples into `@tejika/process`.
 
-## Conventions
-
-- `packages/env/src/paths.ts:20` — `getPidPath` violates the "uppercase
-  abbreviations" guardrail (`ID` not `Id`): rename to `getPIDPath`
-  (cross-package rename; `@tejika/process` consumes it). This was the **only**
-  guardrail violation found repo-wide. Breaking change — coordinate with a
-  minor/major bump and update consumers.
-
 ## Medium severity
 
 - `src/paths.ts:9-11` — `getStateDir` actually returns `envPaths(...).config`;

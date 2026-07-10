@@ -22,7 +22,7 @@ version) as the first step — it affects every package.json edit below.
 ## `@tejika/*` public APIs to consume
 
 - **`@tejika/env`**: `getDataDir(app)`, `getStateDir(app)`,
-  `getSocketPath(app, name?)`, `getPidPath(app)`,
+  `getSocketPath(app, name?)`, `getPIDPath(app)`,
   `getPort(app, opts?: { default?: number })`, `appEnvVar(app, key)`.
   Each resolver honours an `<APP>_<KEY>` env override first.
 - **`@tejika/process`**: `runDaemon`, `spawnDaemon`, `createDaemonClient`

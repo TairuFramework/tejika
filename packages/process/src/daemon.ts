@@ -17,7 +17,7 @@ import type {
 } from '@enkaku/protocol'
 import type { Server } from '@enkaku/server'
 import { SocketTransport } from '@enkaku/socket'
-import { getDataDir, getPidPath, getSocketPath } from '@tejika/env'
+import { getDataDir, getPIDPath, getSocketPath } from '@tejika/env'
 import spawn from 'nano-spawn'
 import { safeRemove, waitForSocket } from './socket.js'
 import { getDaemonStatus } from './status.js'
@@ -43,7 +43,7 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
   opts: RunDaemonOptions<Protocol>,
 ): Promise<void> {
   const socketPath = opts.socketPath ?? getSocketPath(opts.app)
-  const pidPath = opts.pidPath ?? getPidPath(opts.app)
+  const pidPath = opts.pidPath ?? getPIDPath(opts.app)
 
   // Refuse to boot beside a live daemon: blindly unlinking the socket below
   // would orphan the running instance (split-brain). getDaemonStatus reaps a

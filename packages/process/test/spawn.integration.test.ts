@@ -28,7 +28,7 @@ test('ensureDaemon spawns a daemon and the client reconnects after it is killed'
   // Spawned daemon inherits this env: tsx loader so it can run the .ts entry,
   // and a pid-path override so it writes its pidfile to tmp instead of the real
   // state dir. The override is load-bearing: the fixture calls runDaemon WITHOUT
-  // a pidPath, so it defaults to getPidPath('tejika-test'), which honors
+  // a pidPath, so it defaults to getPIDPath('tejika-test'), which honors
   // TEJIKA_TEST_PID_PATH first — and the assertions below read that same path.
   // (The socket path needs no env override; it is passed explicitly via
   // ensureDaemon -> spawnDaemon -> the entry's --socket-path flag.)

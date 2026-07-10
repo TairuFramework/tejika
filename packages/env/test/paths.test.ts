@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { getDataDir, getPidPath, getSocketPath, getStateDir } from '../src/paths.js'
+import { getDataDir, getPIDPath, getSocketPath, getStateDir } from '../src/paths.js'
 
 afterEach(() => {
   delete process.env.MYAPP_DATA_DIR
@@ -28,13 +28,13 @@ describe('getStateDir', () => {
   })
 })
 
-describe('getPidPath', () => {
+describe('getPIDPath', () => {
   test('derives a pid path under the state dir', () => {
-    expect(getPidPath('myapp')).toMatch(/myapp.*\.pid$/)
+    expect(getPIDPath('myapp')).toMatch(/myapp.*\.pid$/)
   })
   test('honors the env override first', () => {
     process.env.MYAPP_PID_PATH = '/tmp/custom.pid'
-    expect(getPidPath('myapp')).toBe('/tmp/custom.pid')
+    expect(getPIDPath('myapp')).toBe('/tmp/custom.pid')
   })
 })
 
@@ -65,8 +65,8 @@ describe('empty override treated as unset', () => {
     process.env.MYAPP_SOCKET_PATH = ''
     expect(getSocketPath('myapp')).toMatch(/myapp.*\.sock$/)
   })
-  test('getPidPath derives a path when override is empty', () => {
+  test('getPIDPath derives a path when override is empty', () => {
     process.env.MYAPP_PID_PATH = ''
-    expect(getPidPath('myapp')).toMatch(/myapp.*\.pid$/)
+    expect(getPIDPath('myapp')).toMatch(/myapp.*\.pid$/)
   })
 })

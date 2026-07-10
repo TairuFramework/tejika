@@ -17,6 +17,6 @@ export function getSocketPath(app: string, name?: string): string {
   return join(getDataDir(app), file)
 }
 
-export function getPidPath(app: string): string {
+export function getPIDPath(app: string): string {
   return getAppEnvVar(app, 'PID_PATH') ?? join(getStateDir(app), `${app}.pid`)
 }

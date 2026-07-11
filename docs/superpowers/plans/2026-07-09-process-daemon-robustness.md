@@ -578,7 +578,7 @@ git commit -m "feat(process): add exclusive daemon lock with a JSON record"
 **Interfaces:**
 - Consumes: nothing.
 - Produces:
-  - `type Deadline = { remaining(): number; expired(): boolean; timedOut(): boolean; signal: AbortSignal }`
+  - `type Deadline = { remaining(): number; timedOut(): boolean; signal: AbortSignal }`
   - `function createDeadline(timeoutMs?: number, signal?: AbortSignal): Deadline`
   - `type SocketProbe = 'live' | 'dead' | 'forbidden'`
   - `function probeSocket(socketPath: string): Promise<SocketProbe>`
@@ -589,9 +589,9 @@ git commit -m "feat(process): add exclusive daemon lock with a JSON record"
 
 `EACCES` and `EPERM` from `connectSocket` mean *something is listening* and we merely lack permission. They must not count as dead, because a dead verdict authorises unlinking the socket file.
 
-`createDeadline()` with no arguments yields `remaining() === Infinity`, `expired() === false`, and a never-aborting signal.
+`createDeadline()` with no arguments yields `remaining() === Infinity` and a never-aborting signal.
 
-`expired()` and `timedOut()` differ deliberately. `expired()` is true whenever the combined signal has aborted **or** the budget is gone — "stop waiting, for whatever reason". `timedOut()` is true **only** when the time budget itself ran out — it checks the internal timeout signal's own `aborted` state, not the millisecond `remaining()` proxy, and stays false when a caller's `AbortSignal` is what aborted. That distinction is the arbiter `waitForSocket` uses to decide between throwing its timeout `Error` and propagating the caller's `AbortError`; `remaining() === 0` is unreliable at the exact deadline tick because `Date.now()` is millisecond-grained while `AbortSignal.timeout` fires on a real timer.
+There is deliberately no `expired()`: folding "the caller aborted" and "the clock ran out" into one boolean is exactly the bug this type exists to prevent. `timedOut()` is true **only** when the time budget itself ran out — it checks the internal timeout signal's own `aborted` state, not the millisecond `remaining()` proxy, and stays false when a caller's `AbortSignal` is what aborted. That distinction is the arbiter `waitForSocket` uses to decide between throwing its timeout `Error` and propagating the caller's `AbortError`; `remaining() === 0` is unreliable at the exact deadline tick because `Date.now()` is millisecond-grained while `AbortSignal.timeout` fires on a real timer.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -606,16 +606,15 @@ describe('createDeadline', () => {
   test('is unbounded with no timeout and no signal', () => {
     const deadline = createDeadline()
     expect(deadline.remaining()).toBe(Number.POSITIVE_INFINITY)
-    expect(deadline.expired()).toBe(false)
+    expect(deadline.timedOut()).toBe(false)
     expect(deadline.signal.aborted).toBe(false)
   })
 
-  test('counts down and expires', async () => {
+  test('counts down and runs out', async () => {
     const deadline = createDeadline(50)
     expect(deadline.remaining()).toBeGreaterThan(0)
     expect(deadline.remaining()).toBeLessThanOrEqual(50)
     await delay(80)
-    expect(deadline.expired()).toBe(true)
     expect(deadline.remaining()).toBe(0)
     expect(deadline.signal.aborted).toBe(true)
   })
@@ -626,19 +625,25 @@ describe('createDeadline', () => {
     expect(deadline.signal.aborted).toBe(false)
     controller.abort()
     expect(deadline.signal.aborted).toBe(true)
-    expect(deadline.expired()).toBe(true)
+    // Aborted, with the budget still nearly whole — and therefore NOT a timeout.
+    expect(deadline.remaining()).toBeGreaterThan(0)
+    expect(deadline.timedOut()).toBe(false)
   })
 
-  test('an already-aborted caller signal expires the deadline immediately', () => {
-    expect(createDeadline(10_000, AbortSignal.abort()).expired()).toBe(true)
+  test('an already-aborted caller signal aborts the deadline immediately', () => {
+    const deadline = createDeadline(10_000, AbortSignal.abort())
+    expect(deadline.signal.aborted).toBe(true)
+    expect(deadline.timedOut()).toBe(false)
   })
 
-  test('a caller signal with no timeout still expires on abort', () => {
+  test('a caller signal with no timeout still aborts', () => {
     const controller = new AbortController()
     const deadline = createDeadline(undefined, controller.signal)
-    expect(deadline.expired()).toBe(false)
+    expect(deadline.signal.aborted).toBe(false)
     controller.abort()
-    expect(deadline.expired()).toBe(true)
+    expect(deadline.signal.aborted).toBe(true)
+    // An unbounded budget can never time out, however hard it is aborted.
+    expect(deadline.timedOut()).toBe(false)
   })
 
   test('timedOut is true only when the time budget ran out, not on a caller abort', () => {
@@ -646,8 +651,8 @@ describe('createDeadline', () => {
     const deadline = createDeadline(10_000, controller.signal)
     expect(deadline.timedOut()).toBe(false)
     controller.abort()
-    // The deadline is now expired — but the *caller* aborted it, not the clock.
-    expect(deadline.expired()).toBe(true)
+    // The wait is over — but the *caller* ended it, not the clock.
+    expect(deadline.signal.aborted).toBe(true)
     expect(deadline.timedOut()).toBe(false)
   })
 
@@ -770,12 +775,19 @@ Expected: FAIL — `Failed to resolve import "../src/deadline.js"`, and `probeSo
 Create `packages/process/src/deadline.ts`:
 
 ```ts
-/** A shared time budget: a countdown plus the signal that fires at zero. */
+/**
+ * A shared time budget: a countdown plus the signal that fires at zero.
+ *
+ * There is deliberately no `expired()`. It existed, nothing in the library ever
+ * called it, and every waiter that looked like it might was in fact composing
+ * `signal` (for cancellation) with `timedOut()` (for the verdict). Keeping a
+ * "should I stop waiting?" predicate that folds an abort and a timeout back into
+ * one boolean only invites the bug this type exists to prevent: telling the two
+ * apart is the whole point, and `timedOut()` is the only sanctioned arbiter.
+ */
 export type Deadline = {
   /** Milliseconds left, or `Infinity` when unbounded. Never negative. */
   remaining(): number
-  /** True once we should stop waiting — the budget is gone OR a caller aborted. */
-  expired(): boolean
   /**
    * True ONLY when the time budget itself ran out, never for a caller abort.
    * Reads the timeout signal's own `aborted` state, not the `remaining()`
@@ -807,7 +819,6 @@ export function createDeadline(timeoutMs?: number, signal?: AbortSignal): Deadli
 
   return {
     remaining,
-    expired: (): boolean => combined.aborted || remaining() === 0,
     // `timeout.aborted` is the ground truth for "the clock ran out"; the
     // `remaining() === 0` disjunct only covers a caller reading it a hair early.
     timedOut: (): boolean => (timeout?.aborted ?? false) || remaining() === 0,
@@ -1168,7 +1179,7 @@ function isGone(pid: number): boolean {
 async function pollUntilGone(pid: number, deadline: Deadline): Promise<boolean> {
   for (;;) {
     if (isGone(pid)) return true
-    if (deadline.expired()) return false
+    if (deadline.timedOut()) return false
     try {
       await delay(EXIT_POLL_INTERVAL_MS, undefined, { signal: deadline.signal })
     } catch {
@@ -2577,7 +2588,7 @@ async function connectWithRetry<Protocol extends ProtocolDefinition>(
     } catch (err) {
       if (!isConnectError(err)) throw err
       lastError = err
-      if (deadline.expired()) throw lastError
+      if (deadline.timedOut()) throw lastError
       await delay(Math.min(intervalMs, deadline.remaining()), undefined, {
         signal: deadline.signal,
       })

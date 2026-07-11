@@ -1,4 +1,12 @@
-import { mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
@@ -87,6 +95,33 @@ describe('claimDaemonLock', () => {
     expect(readdirSync(dir)).toEqual([])
   })
 
+  // A SIGKILL between `writeTempRecord` and the `link`/`rename` orphans the temp
+  // sibling forever: nothing else looks at it and `getDaemonStatus` cannot see it,
+  // so a crash-looping daemon accumulates one per boot. Winning a claim is the one
+  // moment we know the previous holder is gone, so that is when we sweep — but only
+  // files old enough that no concurrent claimer could still be linking one.
+  test('a won claim sweeps orphaned temp records, sparing fresh ones and other files', () => {
+    const stale = `${pidPath}.999.deadbeef.tmp`
+    const fresh = `${pidPath}.998.cafebabe.tmp`
+    const unrelated = join(dir, 'app.sock')
+    const otherPID = `${join(dir, 'other.pid')}.997.f00d.tmp`
+    for (const path of [stale, fresh, unrelated, otherPID]) writeFileSync(path, 'x', 'utf8')
+    // Older than the sweep's age floor: no live claim can still be linking these.
+    const old = new Date(Date.now() - 60_000)
+    utimesSync(stale, old, old)
+    utimesSync(otherPID, old, old)
+
+    const result = claimDaemonLock(pidPath, record())
+    expect('lock' in result).toBe(true)
+
+    expect(existsSync(stale)).toBe(false)
+    // A racing claimer's temp file is mid-flight, not garbage.
+    expect(existsSync(fresh)).toBe(true)
+    // Neither the socket nor another daemon's temp file is ours to remove.
+    expect(existsSync(unrelated)).toBe(true)
+    expect(existsSync(otherPID)).toBe(true)
+  })
+
   // The claim must be atomic to a READER, not just to a competing claimer. A
   // create-then-write claim leaves a zero-byte lockfile visible for microseconds;
   // a booter that reads it there parses nothing, classifies `not-running`, and
@@ -147,6 +182,17 @@ describe('readLockRecord', () => {
 
   test('returns null for a record with a non-numeric pid', () => {
     writeFileSync(pidPath, JSON.stringify({ ...record(), pid: 'abc' }), 'utf8')
+    expect(readLockRecord(pidPath)).toBeNull()
+  })
+
+  // A non-positive pid is not a daemon, it is a weapon. `process.kill(0, sig)`
+  // signals the WHOLE process group — the CLI that read this file included — and
+  // `kill(-1, sig)` every process the user may signal. Both also pass a liveness
+  // check (`kill(pid, 0)` succeeds), so such a record classified as a LIVE daemon
+  // and walked straight into `stopDaemon`'s SIGTERM. The guard only demanded an
+  // integer.
+  test.each([0, -1, -12345])('returns null for a record with a pid of %i', (pid) => {
+    writeFileSync(pidPath, JSON.stringify({ ...record(), pid }), 'utf8')
     expect(readLockRecord(pidPath)).toBeNull()
   })
 })

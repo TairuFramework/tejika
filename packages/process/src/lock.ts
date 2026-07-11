@@ -4,12 +4,14 @@ import {
   fstatSync,
   linkSync,
   openSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 
 /**
  * The on-disk lock. `ready` is false between claiming the lock and binding the
@@ -44,6 +46,13 @@ function isLockRecord(value: unknown): value is LockRecord {
   return (
     typeof record.pid === 'number' &&
     Number.isInteger(record.pid) &&
+    // A non-positive pid is not a daemon, it is a weapon: `process.kill(0, sig)`
+    // signals the WHOLE process group — the CLI reading this lockfile included —
+    // and `kill(-1, sig)` every process the user may signal. Worse, `kill(0, 0)`
+    // succeeds, so such a record classifies as a LIVE daemon and walks straight
+    // into `stopDaemon`'s SIGTERM. Refuse it here, where every reader passes:
+    // a record that cannot be trusted is treated exactly like a corrupt one.
+    record.pid > 0 &&
     typeof record.socketPath === 'string' &&
     typeof record.startedAt === 'number' &&
     typeof record.ready === 'boolean'
@@ -111,6 +120,42 @@ function writeTempRecord(pidPath: string, record: LockRecord): string {
 }
 
 /**
+ * Old enough that no claim can still be mid-flight. Deliberately the same order as
+ * `status.ts`'s boot grace, but a local constant: `status.ts` imports this module,
+ * so importing it back would close an import cycle for a single number.
+ */
+const TEMP_RECORD_MAX_AGE_MS = 10_000
+
+/**
+ * Remove orphaned `.tmp` siblings. `writeTempRecord` then `link`/`rename` is only
+ * atomic because the content exists under a throwaway name first — but a SIGKILL
+ * landing in that window leaves the throwaway behind forever. Nothing else ever
+ * looks at those files and `getDaemonStatus` cannot see them, so a crash-looping
+ * daemon quietly accumulates them.
+ *
+ * Only files old enough that no live claim could still be linking one are touched,
+ * so a concurrent claimer's fresh temp file is never pulled out from under it.
+ * Best-effort throughout: a claim must never fail because tidying up did.
+ */
+function sweepTempRecords(pidPath: string): void {
+  const prefix = `${basename(pidPath)}.`
+  const cutoff = Date.now() - TEMP_RECORD_MAX_AGE_MS
+  try {
+    for (const name of readdirSync(dirname(pidPath))) {
+      if (!name.startsWith(prefix) || !name.endsWith('.tmp')) continue
+      const tmpPath = join(dirname(pidPath), name)
+      try {
+        if (statSync(tmpPath).mtimeMs < cutoff) rmSync(tmpPath, { force: true })
+      } catch {
+        // Raced by another sweeper, or not ours to remove. Leave it.
+      }
+    }
+  } catch {
+    // An unreadable directory is not a reason to fail the claim we just won.
+  }
+}
+
+/**
  * Unlink the lockfile only if its inode still matches `expectedInode`. Required,
  * not optional: an unguarded reap is an unlink of whatever happens to sit at the
  * path right now, which — after any await — may be a different daemon's live
@@ -155,6 +200,10 @@ export function claimDaemonLock(pidPath: string, record: LockRecord): ClaimResul
     // The lockfile is a second link to the same inode; ours is now redundant.
     rmSync(tmpPath, { force: true })
   }
+
+  // We won the claim: the one moment we know the previous holder is gone and can
+  // safely tidy up the temp files its crash may have orphaned.
+  sweepTempRecords(pidPath)
 
   return {
     lock: {

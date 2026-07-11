@@ -103,7 +103,9 @@ export async function getDaemonStatus(opts: {
 export type StopResult = {
   stopped: boolean
   pid?: number
-  reason?: 'not-running' | 'not-owned' | 'timeout' | 'aborted'
+  reason?: 'not-running' | 'not-owned' | 'timeout' | 'aborted' | 'error'
+  /** Only with `reason: 'error'`: the failure `stopDaemon` refused to throw. */
+  error?: unknown
 }
 
 export type StopDaemonOptions = {
@@ -155,16 +157,32 @@ async function pollUntilGone(pid: number, deadline: Deadline): Promise<boolean> 
  * Send a signal, treating "already exited" as success. ESRCH between the status
  * read and the kill means the daemon exited on its own — a race we win, not an
  * error. Returns a terminal result, or null to continue.
+ *
+ * Never throws, because `stopDaemon` never throws: an unexpected errno becomes a
+ * `reason: 'error'` result rather than a rejection. `kill` is injectable because
+ * no real errno other than ESRCH/EPERM can be provoked against a valid pid.
  */
-function signalTolerantly(pid: number, signal: 'SIGTERM' | 'SIGKILL'): StopResult | null {
+export function signalTolerantly(
+  pid: number,
+  signal: 'SIGTERM' | 'SIGKILL',
+  kill: (pid: number, signal: string) => void = (target, sig) => {
+    process.kill(target, sig)
+  },
+): StopResult | null {
+  // Defence in depth at the authority that does the killing: `process.kill(0, sig)`
+  // signals the ENTIRE process group — the CLI that called us included — and
+  // `kill(-1, sig)` every process this user may signal. `isLockRecord` already
+  // refuses a non-positive pid, so nothing should arrive here; if something does,
+  // it is not a daemon and must not be signalled.
+  if (!Number.isInteger(pid) || pid <= 0) return { stopped: false, pid, reason: 'not-running' }
   try {
-    process.kill(pid, signal)
+    kill(pid, signal)
     return null
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code
     if (code === 'ESRCH') return { stopped: true, pid }
     if (code === 'EPERM') return { stopped: false, pid, reason: 'not-owned' }
-    throw err
+    return { stopped: false, pid, reason: 'error', error: err }
   }
 }
 
@@ -177,19 +195,36 @@ function signalTolerantly(pid: number, signal: 'SIGTERM' | 'SIGKILL'): StopResul
  */
 export async function stopDaemon(opts: StopDaemonOptions): Promise<StopResult> {
   const pidPath = opts.pidPath ?? getPIDPath(opts.app)
+
+  // Refuse up-front, exactly like `runDaemon`. The signal used to be consulted
+  // only inside the exit poll — i.e. after the SIGTERM had already gone out — so
+  // an already-aborted caller got `reason: 'aborted'` AND a killed daemon.
+  // Aborted means "do not do this", not "do it and tell me you didn't".
+  if (opts.signal?.aborted === true) return { stopped: false, reason: 'aborted' }
+
   // Capture the inode with the record we classify. EVERY reap below happens after
   // at least one await, so the file at `pidPath` may by then be a fresh lock a
   // racing `runDaemon` claimed after correctly reaping the stale one we just read.
   // Unlinking that would leave a live daemon with no lockfile: invisible to
   // `getDaemonStatus`, unstoppable, and blocking the socket for every later boot.
   const { status, inode } = await readStatus(pidPath, DEFAULT_BOOT_GRACE_MS)
-  const reap = (): void => {
-    if (inode != null) reapLockFile(pidPath, inode)
+
+  // Re-read at reap time rather than trusting the captured inode alone: a daemon
+  // stopped while still `booting` may have reached `markReady()` first, and that
+  // is a RENAME — a new inode. The captured inode then matches nothing, the reap
+  // silently no-ops, and `{ stopped: true }` is returned over a lockfile still
+  // naming the pid we just killed. So unlink when the file is either the exact one
+  // we classified, or a rewrite of it that still names the pid we stopped. A racing
+  // daemon's fresh claim names a different pid and is never touched.
+  const reap = (pid: number): void => {
+    const entry = readLockEntry(pidPath)
+    if (entry.inode == null) return
+    if (entry.inode === inode || entry.record?.pid === pid) reapLockFile(pidPath, entry.inode)
   }
 
   if (status.state === 'not-running') return { stopped: false, reason: 'not-running' }
   if (status.state === 'stale') {
-    reap()
+    reap(status.pid)
     return { stopped: false, pid: status.pid, reason: 'not-running' }
   }
   if (status.state === 'running-not-owned') {
@@ -197,36 +232,39 @@ export async function stopDaemon(opts: StopDaemonOptions): Promise<StopResult> {
   }
 
   const pid = status.pid
-  const early = signalTolerantly(pid, 'SIGTERM')
-  if (early != null) {
-    if (early.stopped) reap()
-    return early
-  }
-
-  if (opts.waitForExit === false) return { stopped: true, pid }
-
   const killTimeoutMs = opts.killTimeoutMs ?? 5_000
   try {
+    // Inside the try: `stopDaemon` NEVER throws, and this used to sit outside it.
+    const early = signalTolerantly(pid, 'SIGTERM')
+    if (early != null) {
+      if (early.stopped) reap(pid)
+      return early
+    }
+
+    if (opts.waitForExit === false) return { stopped: true, pid }
+
     if (await pollUntilGone(pid, createDeadline(killTimeoutMs, opts.signal))) {
-      reap()
+      reap(pid)
       return { stopped: true, pid }
     }
 
     const escalated = signalTolerantly(pid, 'SIGKILL')
     if (escalated != null && !escalated.stopped) return escalated
     if (await pollUntilGone(pid, createDeadline(SIGKILL_GRACE_MS, opts.signal))) {
-      reap()
+      reap(pid)
       return { stopped: true, pid }
     }
     return { stopped: false, pid, reason: 'timeout' }
   } catch (err) {
-    // Only a CALLER abort reaches here: `pollUntilGone` already resolves budget
+    // A CALLER abort is what normally reaches here: `pollUntilGone` resolves budget
     // exhaustion internally via `timedOut()` rather than throwing. Honor the
     // never-throws invariant by reporting it as a result instead of rejecting —
     // the daemon's fate is genuinely unknown, so 'aborted' rather than a guess.
     if ((err as { name?: string }).name === 'AbortError') {
       return { stopped: false, pid, reason: 'aborted' }
     }
-    throw err
+    // Nothing else is expected to throw. If something does, it is still not a
+    // rejection: this function's contract is that it always resolves.
+    return { stopped: false, pid, reason: 'error', error: err }
   }
 }

@@ -5,11 +5,20 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import type { Client } from '@enkaku/client'
 import { appEnvVar } from '@tejika/env'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { createDaemonClient } from '../src/client.js'
 import { connectWithRetry, ensureDaemon } from '../src/controller.js'
 import { createDeadline } from '../src/deadline.js'
 import { stopDaemon } from '../src/status.js'
 import type { PingProtocol } from './fixtures/protocol.js'
+
+// A pass-through spy: every test in this file still runs the real client. Only
+// the timeout-wiring test below inspects the options `ensureDaemon` hands over —
+// what the client is *told* is the whole of that bug, and nothing else can see it.
+vi.mock('../src/client.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/client.js')>()
+  return { ...actual, createDaemonClient: vi.fn(actual.createDaemonClient) }
+})
 
 const APP = 'tejika-test'
 const entry = fileURLToPath(new URL('./fixtures/daemon-entry.ts', import.meta.url))
@@ -234,6 +243,41 @@ test('a client outlives its ensureDaemon timeoutMs and still reconnects', {
 
   await client.dispose()
   await revived.dispose()
+})
+
+// The budget clamp used to be passed as `connectTimeoutMs` — the value
+// `createDaemonTransport` stores and reuses on EVERY reconnect for the life of the
+// client. A cold start that spent 9.99s of a 10s budget therefore returned a
+// client whose permanent reconnect timeout was ~8ms: the next time the daemon
+// restarted, `connectWithTimeout` gave up after 8ms, destroyed the socket that had
+// in fact connected, and retried — forever, against a perfectly healthy daemon.
+// The same leak the signal comment two lines above swears off, missed for the
+// timeout. Only the FIRST connect may be clamped.
+test('the returned client keeps an unclamped reconnect timeout', {
+  timeout: 30_000,
+}, async () => {
+  // Boot first, so the measured call connects on its very first attempt and stays
+  // deep inside a budget deliberately far smaller than its per-attempt timeout.
+  const boot = await ensureDaemon<PingProtocol>(options())
+  await boot.dispose()
+
+  const spy = vi.mocked(createDaemonClient)
+  spy.mockClear()
+  const client = await ensureDaemon<PingProtocol>({
+    ...options(),
+    timeoutMs: 200,
+    connectTimeoutMs: 5000,
+  })
+  await expect(client.request('ping')).resolves.toBe('pong')
+
+  const passed = spy.mock.calls[0]?.[0]
+  // The first connect may be clamped to what is left of this call's budget...
+  expect(passed?.initialConnectTimeoutMs).toBeLessThanOrEqual(200)
+  // ...but what the transport keeps for its permanent reconnect loop must be the
+  // caller's own per-attempt value, untouched by the budget.
+  expect(passed?.connectTimeoutMs).toBe(5000)
+
+  await client.dispose()
 })
 
 // Finding 2: the hardened `connectWithRetry` abort/timeout boundary (the

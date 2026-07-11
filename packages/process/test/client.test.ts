@@ -3,6 +3,7 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { connectSocket } from '@enkaku/socket'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { connectWithTimeout, createDaemonTransport, nextBackoff } from '../src/client.js'
 import type { PingProtocol } from './fixtures/protocol.js'
@@ -146,6 +147,62 @@ describe('createDaemonTransport', () => {
       }),
     ).rejects.toThrow()
     expect(Date.now() - started).toBeLessThan(2000)
+  })
+
+  // The behavioural half of the clamp fix: `ensureDaemon` clamps the FIRST connect
+  // to what is left of its budget, and that clamp used to become the transport's
+  // permanent reconnect timeout. Here the first connect is given a tiny budget
+  // (50ms — it is fast and local, so it succeeds) while the steady-state timeout is
+  // 2000ms, and the RECONNECT connect is made slow (300ms). If the reconnect were
+  // still judged against the 50ms first-connect budget, `connectWithTimeout` would
+  // reject with ETIMEDOUT and destroy the socket that connected — so the reconnect
+  // must instead be allowed its 2000ms and produce a working stream.
+  test('the reconnect connect is bounded by connectTimeoutMs, not the first-connect clamp', async () => {
+    server = createServer()
+    await new Promise<void>((resolve) => server?.listen(socketPath, resolve))
+    const connections: Array<Socket> = []
+    server.on('connection', (socket) => connections.push(socket))
+
+    let attempts = 0
+    const connect = async (path: string): Promise<Socket> => {
+      attempts += 1
+      // Only the reconnect is slow. A real AF_UNIX connect never is, which is why
+      // the seam has to be injected to reach this at all.
+      if (attempts > 1) await delay(300)
+      return await connectSocket(path)
+    }
+
+    const daemonTransport = await createDaemonTransport<PingProtocol>(
+      {
+        app: 'tejika-test',
+        socketPath,
+        connectTimeoutMs: 2000,
+        initialConnectTimeoutMs: 50,
+      },
+      connect,
+    )
+
+    // The drop: the client's own hook, and the only way in to the reconnect path.
+    const next = daemonTransport.handleTransportDisposed()
+    expect(next).toBeDefined()
+
+    // The reconnect socket is opened lazily, when the transport is first read.
+    const read = (next as NonNullable<typeof next>)
+      .read()
+      .then(() => 'read' as const)
+      .catch((err: unknown) => err as Error)
+    const outcome = await Promise.race([read, delay(1500).then(() => 'connected' as const)])
+
+    // Pre-fix this was an ETIMEDOUT Error at ~50ms. The server never writes, so a
+    // healthy reconnect simply leaves the read pending.
+    expect(outcome).toBe('connected')
+    expect(attempts).toBe(2)
+    expect(connections.length).toBe(2)
+
+    daemonTransport.dispose()
+    // The first transport was never really disposed — only its hook was called —
+    // so its peer socket would keep `server.close()` draining forever.
+    for (const socket of connections) socket.destroy()
   })
 
   test('dispose() tears down the connection, so the peer observes it close', async () => {

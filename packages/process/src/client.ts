@@ -22,8 +22,25 @@ export type CreateDaemonClientOptions = {
   socketPath?: string
   /** Aborting stops reconnection. */
   signal?: AbortSignal
-  /** Bound on each connect attempt. Default 5000ms. */
+  /**
+   * Bound on each connect attempt of the PERMANENT reconnect loop. Default 5000ms.
+   * This value outlives the call that created the client, so it must never carry a
+   * per-call budget — see `initialConnectTimeoutMs`.
+   */
   connectTimeoutMs?: number
+  /**
+   * Bound on the FIRST connect only. Defaults to `connectTimeoutMs`.
+   *
+   * Split from `connectTimeoutMs` because a caller with a total budget (see
+   * `ensureDaemon`) must clamp its first connect to whatever is left of that
+   * budget, yet the client it gets back is used long after the budget is spent. A
+   * single shared value baked the clamp into the reconnect loop: a cold start that
+   * consumed 9.99s of a 10s budget left the client reconnecting with an ~8ms
+   * connect timeout forever, so every later reconnect to a perfectly healthy
+   * daemon timed out, destroyed the socket that DID connect, and retried — a loop
+   * with no exit.
+   */
+  initialConnectTimeoutMs?: number
 }
 
 export type Backoff = {
@@ -99,13 +116,20 @@ export type DaemonTransport<Protocol extends ProtocolDefinition> = {
  * its own `Client` subtype can reuse it. Throws on the INITIAL connect if the
  * socket is absent or refused, so `ensureDaemon` can spawn the daemon; once
  * connected, later drops are healed transparently.
+ *
+ * `connect` is injectable for the same reason it is on `connectWithTimeout`: a
+ * real AF_UNIX connect never takes the slow paths this must survive.
  */
 export async function createDaemonTransport<Protocol extends ProtocolDefinition>(
   opts: CreateDaemonClientOptions,
+  connect: (path: string) => Promise<Socket> = connectSocket,
 ): Promise<DaemonTransport<Protocol>> {
   const socketPath = opts.socketPath ?? getSocketPath(opts.app)
+  // The steady-state timeout. NOT the caller's first-connect clamp: this one is
+  // reused by every reconnect for the whole life of the client.
   const connectTimeoutMs = opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
-  const firstSocket = await connectWithTimeout(socketPath, connectTimeoutMs)
+  const initialConnectTimeoutMs = opts.initialConnectTimeoutMs ?? connectTimeoutMs
+  const firstSocket = await connectWithTimeout(socketPath, initialConnectTimeoutMs, connect)
 
   // The ceiling is the state that must survive across attempts; the delay is a
   // fresh draw from it each time. Conflating the two is what made the backoff
@@ -134,7 +158,7 @@ export async function createDaemonTransport<Protocol extends ProtocolDefinition>
     let self: SocketTransport<ServerMessage, ClientMessage>
     const source = async (): Promise<Socket> => {
       if (delayMs > 0) await delay(delayMs, undefined, { signal: shutdown.signal })
-      const socket = await connectWithTimeout(socketPath, connectTimeoutMs)
+      const socket = await connectWithTimeout(socketPath, connectTimeoutMs, connect)
       if (shutdown.signal.aborted) {
         socket.destroy()
         throw new Error('daemon client disposed')
@@ -195,9 +219,10 @@ export async function createDaemonTransport<Protocol extends ProtocolDefinition>
  */
 export async function createDaemonClient<Protocol extends ProtocolDefinition>(
   opts: CreateDaemonClientOptions,
+  connect?: (path: string) => Promise<Socket>,
 ): Promise<Client<Protocol>> {
   const { transport, handleTransportDisposed, handleTransportError, dispose } =
-    await createDaemonTransport<Protocol>(opts)
+    await createDaemonTransport<Protocol>(opts, connect)
 
   const client = new Client<Protocol>({ transport, handleTransportDisposed, handleTransportError })
   // Stop reconnecting before the client aborts its transport on dispose.

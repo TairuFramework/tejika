@@ -69,8 +69,12 @@ export async function connectWithRetry<Protocol extends ProtocolDefinition>(
       return await createDaemonClient<Protocol>({
         app: opts.app,
         socketPath,
-        // Never let one attempt outlive the shared budget it is spending.
-        connectTimeoutMs: Math.min(connectTimeoutMs, deadline.remaining()),
+        // The client's PERMANENT reconnect timeout: the caller's own value,
+        // never the budget clamp — see `initialConnectTimeoutMs` in client.ts.
+        connectTimeoutMs,
+        // Never let one attempt outlive the shared budget it is spending. Bounds
+        // THIS attempt's connect only.
+        initialConnectTimeoutMs: Math.min(connectTimeoutMs, deadline.remaining()),
         // The CALLER's own signal, not `deadline.signal`: this is the returned
         // client's permanent lifecycle signal (client.ts wires it straight to
         // `shutdown.abort()`, which permanently kills auto-reconnect). Passing
@@ -121,14 +125,20 @@ export async function ensureDaemon<Protocol extends ProtocolDefinition>(
     return await createDaemonClient<Protocol>({
       app: opts.app,
       socketPath,
-      // Clamped to the budget: an unclamped 1000ms attempt against a 300ms
-      // `timeoutMs` would blow through the deadline this call is supposed to obey.
-      connectTimeoutMs: Math.min(connectTimeoutMs, deadline.remaining()),
-      // The CALLER's own signal, not `deadline.signal` — see the matching
-      // comment in `connectWithRetry`. This client may be handed back and used
-      // for a long time; its reconnect lifecycle must not be tied to the
-      // internal per-call timeout budget that bounds only THIS `ensureDaemon`
-      // invocation.
+      // Neither the SIGNAL nor the TIMEOUT of this call's budget may leak into the
+      // returned client: it is handed back and used long after the budget is gone,
+      // and its reconnect lifecycle must not be tied to the internal per-call
+      // budget that bounds only THIS `ensureDaemon` invocation. So the reconnect
+      // loop gets the caller's unclamped per-attempt timeout...
+      connectTimeoutMs,
+      // ...and only the FIRST connect is clamped to the budget: an unclamped
+      // 1000ms attempt against a 300ms `timeoutMs` would blow through the deadline
+      // this call is supposed to obey.
+      initialConnectTimeoutMs: Math.min(connectTimeoutMs, deadline.remaining()),
+      // The CALLER's own signal, not `deadline.signal` — see the matching comment
+      // in `connectWithRetry`. `deadline.signal` contains
+      // `AbortSignal.timeout(timeoutMs)`, which fires on wall-clock even after
+      // this call returned, and client.ts wires it straight to `shutdown.abort()`.
       signal: opts.signal,
     })
   } catch (err) {

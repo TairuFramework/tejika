@@ -154,7 +154,7 @@ describe('stopDaemon', () => {
     expect(readLockRecord(pidPath)?.pid).toBe(process.pid)
   })
 
-  test('a caller abort propagates the AbortError rather than reporting a timeout', async () => {
+  test('a caller abort resolves with reason: aborted rather than throwing or reporting a timeout', async () => {
     // A child that ignores SIGTERM, so the exit poll is still running when the
     // caller aborts. `ready: false` inside the boot grace classifies as booting,
     // which stopDaemon signals exactly like running. It announces itself on stdout
@@ -176,14 +176,14 @@ describe('stopDaemon', () => {
       const controller = new AbortController()
       setTimeout(() => controller.abort(), 100)
       const started = Date.now()
-      const caught = await stopDaemon({
+      const result = await stopDaemon({
         app: APP,
         pidPath,
         killTimeoutMs: 10_000,
         signal: controller.signal,
-      }).catch((err: unknown) => err)
+      })
 
-      expect((caught as Error).name).toBe('AbortError')
+      expect(result).toEqual({ stopped: false, pid: child.pid, reason: 'aborted' })
       expect(Date.now() - started).toBeLessThan(2000)
     } finally {
       child.kill('SIGKILL')

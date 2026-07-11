@@ -103,7 +103,7 @@ export async function getDaemonStatus(opts: {
 export type StopResult = {
   stopped: boolean
   pid?: number
-  reason?: 'not-running' | 'not-owned' | 'timeout'
+  reason?: 'not-running' | 'not-owned' | 'timeout' | 'aborted'
 }
 
 export type StopDaemonOptions = {
@@ -130,9 +130,10 @@ function isGone(pid: number): boolean {
 
 /**
  * Poll until the process exits. Budget exhausted returns false — the caller
- * escalates or reports a timeout. A CALLER abort is not a timeout: its
- * `AbortError` propagates untouched, out through `stopDaemon`, exactly as it does
- * in every other waiter here. `timedOut()` is the arbiter, so the two are told
+ * escalates or reports a timeout. A CALLER abort is not a timeout: it throws the
+ * original `AbortError`, which `stopDaemon` catches and turns into a
+ * `reason: 'aborted'` result rather than reporting a timeout, preserving its
+ * own never-throws invariant. `timedOut()` is the arbiter, so the two are told
  * apart even when the abort and the final timer land in the same tick.
  */
 async function pollUntilGone(pid: number, deadline: Deadline): Promise<boolean> {
@@ -168,9 +169,11 @@ function signalTolerantly(pid: number, signal: 'SIGTERM' | 'SIGKILL'): StopResul
 }
 
 /**
- * Stop the daemon named by the lockfile. A caller abort rejects with the original
- * `AbortError` rather than resolving with a result — the daemon's fate is
- * genuinely unknown at that point, and reporting a timeout would be a lie.
+ * Stop the daemon named by the lockfile. Never throws: every outcome, including
+ * the caller's own `signal` aborting mid-stop, resolves as a `StopResult`. A
+ * caller abort resolves with `reason: 'aborted'` rather than `reason: 'timeout'`
+ * — the daemon's fate is genuinely unknown at that point, and reporting a
+ * timeout would be a lie.
  */
 export async function stopDaemon(opts: StopDaemonOptions): Promise<StopResult> {
   const pidPath = opts.pidPath ?? getPIDPath(opts.app)
@@ -203,16 +206,27 @@ export async function stopDaemon(opts: StopDaemonOptions): Promise<StopResult> {
   if (opts.waitForExit === false) return { stopped: true, pid }
 
   const killTimeoutMs = opts.killTimeoutMs ?? 5_000
-  if (await pollUntilGone(pid, createDeadline(killTimeoutMs, opts.signal))) {
-    reap()
-    return { stopped: true, pid }
-  }
+  try {
+    if (await pollUntilGone(pid, createDeadline(killTimeoutMs, opts.signal))) {
+      reap()
+      return { stopped: true, pid }
+    }
 
-  const escalated = signalTolerantly(pid, 'SIGKILL')
-  if (escalated != null && !escalated.stopped) return escalated
-  if (await pollUntilGone(pid, createDeadline(SIGKILL_GRACE_MS, opts.signal))) {
-    reap()
-    return { stopped: true, pid }
+    const escalated = signalTolerantly(pid, 'SIGKILL')
+    if (escalated != null && !escalated.stopped) return escalated
+    if (await pollUntilGone(pid, createDeadline(SIGKILL_GRACE_MS, opts.signal))) {
+      reap()
+      return { stopped: true, pid }
+    }
+    return { stopped: false, pid, reason: 'timeout' }
+  } catch (err) {
+    // Only a CALLER abort reaches here: `pollUntilGone` already resolves budget
+    // exhaustion internally via `timedOut()` rather than throwing. Honor the
+    // never-throws invariant by reporting it as a result instead of rejecting —
+    // the daemon's fate is genuinely unknown, so 'aborted' rather than a guess.
+    if ((err as { name?: string }).name === 'AbortError') {
+      return { stopped: false, pid, reason: 'aborted' }
+    }
+    throw err
   }
-  return { stopped: false, pid, reason: 'timeout' }
 }

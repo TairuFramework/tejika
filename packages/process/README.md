@@ -58,7 +58,7 @@ import { stopDaemon } from '@tejika/process'
 
 const result = await stopDaemon({ app: 'my-app' })
 if (!result.stopped) {
-  console.log(result.reason) // 'not-running' | 'not-owned' | 'timeout'
+  console.log(result.reason) // 'not-running' | 'not-owned' | 'timeout' | 'aborted'
 }
 ```
 
@@ -78,7 +78,7 @@ takeover.
 | `@tejika/env`'s `getPidPath` | `getPIDPath` — hard rename, no alias |
 | `getDaemonStatus(): DaemonStatus`, synchronous, reaped a stale pidfile as a side effect | `getDaemonStatus(): Promise<DaemonStatus>`, pure — never reaps |
 | `DaemonStatus = { running: boolean; pid?: number; stale: boolean }` | discriminated union on `state`: `'not-running' \| 'stale' \| 'booting' \| 'running' \| 'running-not-owned'` — there is no `.running` boolean anymore |
-| `stopDaemon(): Promise<void>` — fire-and-forget `SIGTERM`, could throw | `stopDaemon(): Promise<StopResult>` (`{ stopped, pid?, reason? }`) — waits for exit and escalates to `SIGKILL` by default, reporting failure rather than throwing. The one exception is your own `signal` firing: that rejects with the original `AbortError`, because the daemon's fate is genuinely unknown at that point and any `StopResult` would be a guess |
+| `stopDaemon(): Promise<void>` — fire-and-forget `SIGTERM`, could throw | `stopDaemon(): Promise<StopResult>` (`{ stopped, pid?, reason? }`) — waits for exit and escalates to `SIGKILL` by default, reporting failure rather than throwing. Never throws, not even on your own `signal` firing: an abort mid-stop resolves with `reason: 'aborted'` (`reason` is `'not-running' \| 'not-owned' \| 'timeout' \| 'aborted'`) rather than rejecting, because the daemon's fate is genuinely unknown at that point and reporting a timeout would be a lie |
 | `runDaemon(): Promise<void>`, signal handlers always installed | `runDaemon(): Promise<DaemonHandle>` (`{ pid, socketPath, pidPath, close() }`); still `await`-compatible at the call site. Signal handlers are opt-in via `handleSignals` (default `true`) |
 | `spawnDaemon`'s post-spawn wait just timed out on a boot crash | `spawnDaemon` races the child's exit against the socket wait and throws a `DaemonBootError` (carrying `logPath`) immediately on a crash |
 | `ensureDaemon({ timeoutMs })` bounded only the post-spawn connect retries (default 5000ms) | `timeoutMs` bounds the whole call — connect, spawn, socket wait, retries (default 10000ms) |

@@ -32,7 +32,7 @@ test('daemon lifecycle against an isolated profile', { timeout: 30_000 }, async 
 
     await stopDaemon({ app: APP, pidPath })
     await waitForDaemonStopped({ pidPath })
-    expect(getDaemonStatus({ app: APP, pidPath }).running).toBe(false)
+    expect((await getDaemonStatus({ app: APP, pidPath })).state).not.toBe('running')
   } finally {
     if (child.exitCode == null) child.kill('SIGKILL')
   }

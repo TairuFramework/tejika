@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer as createNetServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -192,6 +193,29 @@ describe('DaemonHandle.close', () => {
     await delay(200)
     await expect(isSocketLive(socketPath)).resolves.toBe(false)
     expect(readLockRecord(pidPath)).toBeNull()
+  })
+
+  // The signal outlives the daemon — one process may boot and close several — so
+  // the abort listener must not outlive the daemon that registered it.
+  test('removes its abort listener on close', async () => {
+    const controller = new AbortController()
+    const handle = await boot({ signal: controller.signal })
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(1)
+    await handle.close()
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+  })
+})
+
+describe('an already-aborted signal', () => {
+  // Adding an `abort` listener to an ALREADY-aborted signal never fires, so this
+  // used to boot a daemon that claimed the lock, bound the socket, and then simply
+  // never closed. Aborting means "do not run", and the caller's own reason must
+  // come back untouched rather than being reshaped into a timeout.
+  test('refuses to boot, propagating the caller reason, and claims nothing', async () => {
+    const caught = await boot({ signal: AbortSignal.abort() }).catch((err: unknown) => err)
+    expect((caught as Error).name).toBe('AbortError')
+    expect(readLockRecord(pidPath)).toBeNull()
+    await expect(isSocketLive(socketPath)).resolves.toBe(false)
   })
 })
 

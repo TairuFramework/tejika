@@ -129,6 +129,12 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
   const shutdownTimeoutMs = opts.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS
   const handleSignals = opts.handleSignals !== false
 
+  // An already-aborted signal used to be ignored silently: adding an `abort`
+  // listener to it never fires, so the daemon booted, claimed the lock, bound the
+  // socket, and simply never closed. Aborting means "do not run" — say so before
+  // claiming anything, and propagate the caller's own reason untouched.
+  if (opts.signal?.aborted === true) throw opts.signal.reason
+
   // 0o700 before the bind: the socket is unreachable during the window between
   // listen() and chmod(), rather than briefly world-accessible.
   mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 })
@@ -190,7 +196,7 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
 
   let closing: Promise<void> | undefined
 
-  // Declared before `close` so the handler is in scope when `close` removes it.
+  // Declared before `close` so the handlers are in scope when `close` removes them.
   const onSignal = (): void => {
     void close().then(
       () => process.exit(0),
@@ -201,6 +207,10 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     )
   }
 
+  const onAbort = (): void => {
+    void close().catch((err: unknown) => opts.onError?.(err))
+  }
+
   const close = async (): Promise<void> => {
     if (closing != null) return await closing
     closing = (async (): Promise<void> => {
@@ -208,6 +218,9 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
         process.off('SIGTERM', onSignal)
         process.off('SIGINT', onSignal)
       }
+      // The caller's signal outlives this daemon — several may boot and close in
+      // one process — so the listener must not outlive the daemon that added it.
+      opts.signal?.removeEventListener('abort', onAbort)
       try {
         await closeServer(server, connections)
         if (opts.onShutdown != null) await withTimeout(opts.onShutdown(), shutdownTimeoutMs)
@@ -225,9 +238,7 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     process.once('SIGTERM', onSignal)
     process.once('SIGINT', onSignal)
   }
-  opts.signal?.addEventListener('abort', () => void close().catch((err) => opts.onError?.(err)), {
-    once: true,
-  })
+  opts.signal?.addEventListener('abort', onAbort, { once: true })
 
   return { pid: process.pid, socketPath, pidPath, close }
 }

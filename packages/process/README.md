@@ -21,13 +21,25 @@ Local daemon spawn / lifecycle / Enkaku client reconnect for CLIs built on the
 
 ### `runDaemon`
 
+The daemon entry `ensureDaemon`/`spawnDaemon` spawns must parse `--socket-path`
+and `--pid-path` from `argv` and pass them through — see "always passed to the
+child" below for why.
+
 ```ts
+import { parseArgs } from 'node:util'
 import { runDaemon } from '@tejika/process'
 import { serve } from '@enkaku/server'
 import type { MyProtocol } from './protocol.js'
 
+const { values } = parseArgs({
+  options: { 'socket-path': { type: 'string' }, 'pid-path': { type: 'string' } },
+  strict: false,
+})
+
 const handle = await runDaemon<MyProtocol>({
   app: 'my-app',
+  socketPath: values['socket-path'] as string,
+  pidPath: values['pid-path'] as string,
   serve: (transport) =>
     serve<MyProtocol>({ requireAuth: false, handlers: { ping: () => 'pong' }, transport }),
 })
@@ -87,7 +99,7 @@ takeover.
 | `runDaemon(): Promise<void>`, signal handlers always installed | `runDaemon(): Promise<DaemonHandle>` (`{ pid, socketPath, pidPath, close() }`); still `await`-compatible at the call site. Signal handlers are opt-in via `handleSignals` (default `true`) |
 | `spawnDaemon`'s post-spawn wait just timed out on a boot crash | `spawnDaemon` races the child's exit against the socket wait and throws a `DaemonBootError` (carrying `logPath`) immediately on a crash |
 | `ensureDaemon({ timeoutMs })` bounded only the post-spawn connect retries (default 5000ms) | `timeoutMs` bounds the whole call — connect, spawn, socket wait, retries (default 10000ms). It bounds only the call: neither the timeout nor your `signal` is wired into the returned client, whose reconnect loop keeps your unclamped `connectTimeoutMs` and outlives the budget |
-| `spawnDaemon` passed `--pid-path` only when you supplied `pidPath` | `pidPath` defaults from `app` (like `socketPath`) and is always passed to the child, so parent and child can never resolve a different lockfile |
+| `spawnDaemon` passed `--pid-path` only when you supplied `pidPath` | `pidPath` defaults from `app` (like `socketPath`) and is always passed to the child. An entry that parses and honors the flag can never resolve a different lockfile than its parent; an entry that ignores it (e.g. re-deriving paths from `app` alone) can still diverge under an `env` override — see the `runDaemon` example above |
 
 New exports with no `0.1.0` equivalent: `createDaemonTransport` (the
 reconnecting-transport seam behind `createDaemonClient`, for a consumer with

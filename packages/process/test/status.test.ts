@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import runCommand from 'nano-spawn'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
@@ -213,8 +214,11 @@ describe('stopDaemon', () => {
 
       expect(result).toEqual({ stopped: false, reason: 'aborted' })
       // The daemon must be untouched: an aborted caller asked for nothing to happen.
-      expect(child.killed).toBe(false)
-      expect(child.exitCode).toBeNull()
+      // `child.killed`/`child.exitCode` only reflect a signal sent via `child.kill()`,
+      // never an external `process.kill` — they can't prove no SIGTERM was sent. Wait
+      // long enough for a real SIGTERM to land, then assert the PID is still alive.
+      await delay(200)
+      expect(() => process.kill(child.pid as number, 0)).not.toThrow()
     } finally {
       child.kill('SIGKILL')
     }

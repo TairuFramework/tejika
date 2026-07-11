@@ -109,6 +109,13 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
     // Dereference the child so it can outlive us.
     const child = await subprocess.nodeChildProcess
     child.unref()
+  } catch {
+    // The child never started at all — `node` could not be executed. Throwing the
+    // raw errno from here would abandon `exited`, whose rejection nothing has
+    // handled yet: an unhandled rejection, which is fatal in Node. `exited` already
+    // carries this same failure as a `DaemonBootError`, so say nothing and let the
+    // race below surface it, with the log path attached, like every other boot
+    // failure.
   } finally {
     // The child holds its own copy of the descriptor; release ours.
     closeSync(logFD)
@@ -121,9 +128,10 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
   const abandon = new AbortController()
   const waitDeadline: Deadline = {
     remaining: () => deadline.remaining(),
-    expired: () => abandon.signal.aborted || deadline.expired(),
-    // Unchanged: only the shared budget running out is a timeout. Abandoning the
-    // wait is neither a timeout nor a caller abort — nobody reads its rejection.
+    // Only the shared budget running out is a timeout. Abandoning the wait is
+    // neither a timeout nor a caller abort — nobody reads its rejection. So the
+    // abandon signal belongs in `signal`, which is what actually cancels the wait,
+    // and nowhere else.
     timedOut: () => deadline.timedOut(),
     signal: AbortSignal.any([deadline.signal, abandon.signal]),
   }

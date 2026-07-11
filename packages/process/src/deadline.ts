@@ -1,9 +1,16 @@
-/** A shared time budget: a countdown plus the signal that fires at zero. */
+/**
+ * A shared time budget: a countdown plus the signal that fires at zero.
+ *
+ * There is deliberately no `expired()`. It existed, nothing in the library ever
+ * called it, and every waiter that looked like it might was in fact composing
+ * `signal` (for cancellation) with `timedOut()` (for the verdict). Keeping a
+ * "should I stop waiting?" predicate that folds an abort and a timeout back into
+ * one boolean only invites the bug this type exists to prevent: telling the two
+ * apart is the whole point, and `timedOut()` is the only sanctioned arbiter.
+ */
 export type Deadline = {
   /** Milliseconds left, or `Infinity` when unbounded. Never negative. */
   remaining(): number
-  /** True once we should stop waiting — the budget is gone OR a caller aborted. */
-  expired(): boolean
   /**
    * True ONLY when the time budget itself ran out, never for a caller abort.
    * Reads the timeout signal's own `aborted` state, not the `remaining()`
@@ -35,7 +42,6 @@ export function createDeadline(timeoutMs?: number, signal?: AbortSignal): Deadli
 
   return {
     remaining,
-    expired: (): boolean => combined.aborted || remaining() === 0,
     // `timeout.aborted` is the ground truth for "the clock ran out"; the
     // `remaining() === 0` disjunct only covers a caller reading it a hair early.
     timedOut: (): boolean => (timeout?.aborted ?? false) || remaining() === 0,

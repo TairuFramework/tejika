@@ -9,7 +9,13 @@ export { type DaemonHandle, type RunDaemonOptions, runDaemon } from './daemon.js
 export { createDeadline, type Deadline } from './deadline.js'
 export { DaemonAlreadyRunningError, DaemonBootError } from './errors.js'
 export type { LockRecord } from './lock.js'
-export { isSocketLive, probeSocket, type SocketProbe, waitForSocket } from './socket.js'
+export {
+  classifyConnectError,
+  isSocketLive,
+  probeSocket,
+  type SocketProbe,
+  waitForSocket,
+} from './socket.js'
 export { type SpawnDaemonOptions, spawnDaemon } from './spawn.js'
 export {
   type DaemonStatus,

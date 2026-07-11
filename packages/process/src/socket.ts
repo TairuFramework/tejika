@@ -1,31 +1,63 @@
 import { rmSync } from 'node:fs'
+import type { Socket } from 'node:net'
 import { setTimeout as delay } from 'node:timers/promises'
 import { connectSocket } from '@enkaku/socket'
 import { createDeadline, type Deadline } from './deadline.js'
 
 /**
- * `forbidden` means something IS listening but we may not connect (EACCES /
- * EPERM — typically another user's daemon). It must never be treated as dead:
- * a dead verdict authorises unlinking the socket file.
+ * Only `dead` is load-bearing, and only `dead` is dangerous: it is the verdict
+ * that AUTHORISES unlinking the socket file (`controller`, `daemon`, and — via
+ * `stale` — the boot path that reaps the lock). So it is stated positively and
+ * every other outcome fails safe.
+ *
+ * - `live`: something answered.
+ * - `forbidden`: something IS listening but we may not connect (EACCES / EPERM,
+ *   typically another user's daemon).
+ * - `unknown`: the connect failed for a reason that says nothing about the peer —
+ *   EMFILE, ENOMEM, EAGAIN and friends are OUR failures, not the daemon's. A CLI
+ *   under fd pressure must not conclude that a healthy daemon is dead and unlink
+ *   its socket out from under it.
  */
-export type SocketProbe = 'live' | 'dead' | 'forbidden'
+export type SocketProbe = 'live' | 'dead' | 'forbidden' | 'unknown'
 
+// ECONNREFUSED: the file is there, nothing is accepting. ENOENT: no file at all.
+// ENOTSOCK: the path exists but is not a socket. These, and ONLY these, mean the
+// peer is genuinely gone. Anything else is either a permission wall (something is
+// there) or a local resource failure (we cannot tell) — never a licence to unlink.
+const DEAD_CODES = new Set(['ECONNREFUSED', 'ENOENT', 'ENOTSOCK'])
 const FORBIDDEN_CODES = new Set(['EACCES', 'EPERM'])
 
-export async function probeSocket(socketPath: string): Promise<SocketProbe> {
+/** Classify a failed connect. Exported for the tests that pin the safe default. */
+export function classifyConnectError(err: unknown): SocketProbe {
+  const code = (err as NodeJS.ErrnoException).code ?? ''
+  if (DEAD_CODES.has(code)) return 'dead'
+  return FORBIDDEN_CODES.has(code) ? 'forbidden' : 'unknown'
+}
+
+/** `connect` is injectable so errnos we cannot provoke for real (EMFILE) are testable. */
+export async function probeSocket(
+  socketPath: string,
+  connect: (path: string) => Promise<Socket> = connectSocket,
+): Promise<SocketProbe> {
   try {
-    const socket = await connectSocket(socketPath)
+    const socket = await connect(socketPath)
     socket.destroy()
     return 'live'
   } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code ?? ''
-    return FORBIDDEN_CODES.has(code) ? 'forbidden' : 'dead'
+    return classifyConnectError(err)
   }
 }
 
-/** True if something is actively listening on the socket (not just a stale file). */
-export async function isSocketLive(socketPath: string): Promise<boolean> {
-  return (await probeSocket(socketPath)) !== 'dead'
+/**
+ * True if something is actively listening on the socket (not just a stale file).
+ * Deliberately the complement of `dead`: `forbidden` and `unknown` both read as
+ * live, because only `dead` may authorise removing the socket file.
+ */
+export async function isSocketLive(
+  socketPath: string,
+  connect?: (path: string) => Promise<Socket>,
+): Promise<boolean> {
+  return (await probeSocket(socketPath, connect)) !== 'dead'
 }
 
 export type WaitForSocketOptions = { deadline?: Deadline; interval?: number }

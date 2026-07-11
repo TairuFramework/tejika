@@ -26,6 +26,12 @@ const listen = async (): Promise<void> => {
   await new Promise<void>((resolve) => server?.listen(socketPath, resolve))
 }
 
+const failing = (code: string) => async (): Promise<never> => {
+  const err = new Error(code) as NodeJS.ErrnoException
+  err.code = code
+  throw err
+}
+
 describe('probeSocket', () => {
   test('reports dead when nothing is listening', async () => {
     await expect(probeSocket(socketPath)).resolves.toBe('dead')
@@ -34,6 +40,29 @@ describe('probeSocket', () => {
   test('reports live when a server is listening', async () => {
     await listen()
     await expect(probeSocket(socketPath)).resolves.toBe('live')
+  })
+
+  test('reports dead only for the errnos that mean the peer is gone', async () => {
+    for (const code of ['ECONNREFUSED', 'ENOENT', 'ENOTSOCK']) {
+      await expect(probeSocket(socketPath, failing(code))).resolves.toBe('dead')
+    }
+  })
+
+  test('reports forbidden, never dead, when the connect is walled off', async () => {
+    for (const code of ['EACCES', 'EPERM']) {
+      await expect(probeSocket(socketPath, failing(code))).resolves.toBe('forbidden')
+    }
+  })
+
+  // The dangerous default. A `dead` verdict AUTHORISES an unlink (controller.ts,
+  // daemon.ts, and status.ts via `stale`). EMFILE/ENFILE/ENOMEM/EAGAIN are OUR
+  // failures and say nothing about the peer — a CLI under fd pressure calling
+  // ensureDaemon would otherwise unlink a HEALTHY daemon's socket file. Anything
+  // unenumerated must fail safe.
+  test('never reports dead for a local failure that says nothing about the peer', async () => {
+    for (const code of ['EMFILE', 'ENFILE', 'ENOMEM', 'EAGAIN', 'EINTR', '']) {
+      await expect(probeSocket(socketPath, failing(code))).resolves.toBe('unknown')
+    }
   })
 })
 
@@ -45,6 +74,13 @@ describe('isSocketLive', () => {
   test('is true for a listening socket', async () => {
     await listen()
     await expect(isSocketLive(socketPath)).resolves.toBe(true)
+  })
+
+  // The invariant every unlink in this package rests on: only `dead` is dead.
+  test('is true for forbidden and unknown, so neither can authorise an unlink', async () => {
+    for (const code of ['EACCES', 'EPERM', 'EMFILE', 'ENOMEM']) {
+      await expect(isSocketLive(socketPath, failing(code))).resolves.toBe(true)
+    }
   })
 })
 

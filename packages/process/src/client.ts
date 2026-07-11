@@ -36,9 +36,10 @@ export function nextBackoff(current: number, random: () => number = Math.random)
 }
 
 /**
- * Connect, but never hang: Enkaku's `connectSocket` has no timeout of its own.
- * On timeout the still-pending connect is destroyed when it eventually settles,
- * so no socket leaks. (Upstream fix filed; this is the local mitigation.)
+ * Connect, but never hang: `@enkaku/socket`'s `connectSocket` offers no connect
+ * timeout of its own and leaks its `connect`/`error` listeners. This is the
+ * local mitigation: on timeout the still-pending connect is destroyed when it
+ * eventually settles, so no socket leaks.
  */
 async function connectWithTimeout(socketPath: string, timeoutMs: number): Promise<Socket> {
   const pending = connectSocket(socketPath)
@@ -143,14 +144,13 @@ export async function createDaemonTransport<Protocol extends ProtocolDefinition>
     // Destroy AFTER the transport settles: its dispose closes the writer, which
     // ends the socket — ending an already-destroyed socket would raise
     // ERR_STREAM_DESTROYED on a socket whose error listener is already detached.
-    // `Disposer.dispose` is idempotent, so a `Client` disposing it too is a no-op.
+    // `Disposer.dispose` never rejects (internal errors are routed to
+    // `onDisposeError`), so a single `.then` is enough; it is also idempotent,
+    // so a `Client` disposing it too is a no-op.
     dispose: () => {
       shutdown.abort()
       const socket = currentSocket
-      void currentTransport.dispose().then(
-        () => socket.destroy(),
-        () => socket.destroy(),
-      )
+      void currentTransport.dispose().then(() => socket.destroy())
     },
   }
 }

@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs'
-import { createServer, type Server } from 'node:net'
+import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createDaemonTransport, nextBackoff } from '../src/client.js'
 import type { PingProtocol } from './fixtures/protocol.js'
@@ -83,5 +84,27 @@ describe('createDaemonTransport', () => {
       }),
     ).rejects.toThrow()
     expect(Date.now() - started).toBeLessThan(2000)
+  })
+
+  test('dispose() tears down the connection, so the peer observes it close', async () => {
+    server = createServer()
+    const accepted = new Promise<Socket>((resolve) => server?.once('connection', resolve))
+    await new Promise<void>((resolve) => server?.listen(socketPath, resolve))
+
+    const daemonTransport = await createDaemonTransport<PingProtocol>({
+      app: 'tejika-test',
+      socketPath,
+    })
+    const serverSocket = await accepted
+    const serverSideClosed = new Promise<void>((resolve) => serverSocket.once('close', resolve))
+
+    daemonTransport.dispose()
+
+    await Promise.race([
+      serverSideClosed,
+      delay(2000).then(() => {
+        throw new Error('timed out waiting for the server to observe the socket close')
+      }),
+    ])
   })
 })

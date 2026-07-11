@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
+import type { Client } from '@enkaku/client'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { connectWithRetry, ensureDaemon } from '../src/controller.js'
 import { createDeadline } from '../src/deadline.js'
@@ -45,6 +46,33 @@ test('spawns a daemon and returns a working client', { timeout: 30_000 }, async 
   const client = await ensureDaemon<PingProtocol>(options())
   await expect(client.request('ping')).resolves.toBe('pong')
   await client.dispose()
+})
+
+// The flagship scenario this branch exists for: two CLIs cold-start the same
+// daemon at the same moment. One child wins the O_EXCL claim and binds; the other
+// loses it, throws DaemonAlreadyRunningError and exits nonzero. `spawnDaemon`
+// raced that exit against the socket wait and turned ANY exit into a
+// DaemonBootError — and the exit reliably beats the wait's first 50ms poll — so
+// the losing CLI failed even though a healthy daemon was up and it should simply
+// have connected to it. BOTH callers must end up with a working client.
+test('two concurrent cold starts both get a working client', {
+  timeout: 60_000,
+}, async () => {
+  const results = await Promise.allSettled([
+    ensureDaemon<PingProtocol>(options()),
+    ensureDaemon<PingProtocol>(options()),
+  ])
+
+  const rejected = results.filter((r) => r.status === 'rejected')
+  expect(
+    rejected.map((r) => `${(r.reason as Error).name}: ${(r.reason as Error).message}`),
+  ).toEqual([])
+
+  const clients = results.map((r) => (r as PromiseFulfilledResult<Client<PingProtocol>>).value)
+  for (const client of clients) {
+    await expect(client.request('ping')).resolves.toBe('pong')
+  }
+  await Promise.all(clients.map((client) => client.dispose()))
 })
 
 test('clears a stale socket file and boots anyway', { timeout: 30_000 }, async () => {

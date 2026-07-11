@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
-import { ensureDaemon } from '../src/controller.js'
+import { connectWithRetry, ensureDaemon } from '../src/controller.js'
+import { createDeadline } from '../src/deadline.js'
 import { stopDaemon } from '../src/status.js'
 import type { PingProtocol } from './fixtures/protocol.js'
 
@@ -103,4 +104,127 @@ test('the client reconnects after the daemon is SIGKILLed and revived', {
 
   await client.dispose()
   await revived.dispose()
+})
+
+// Regression for the reviewer's Critical: `ensureDaemon` used to pass
+// `deadline.signal` as the returned client's LIFECYCLE signal. `deadline.signal`
+// contains `AbortSignal.timeout(timeoutMs)`, which fires on wall-clock even after
+// `ensureDaemon` already returned successfully — once it fires, `client.ts` wires
+// it straight to `shutdown.abort()` and the client can never reconnect again,
+// silently defeating the whole reconnect-resilience feature. `timeoutMs` is kept
+// short here so the bug's background timer has time to fire inside the test.
+test('a client outlives its ensureDaemon timeoutMs and still reconnects', {
+  timeout: 30_000,
+}, async () => {
+  // Boot the daemon first so the second `ensureDaemon` call below connects to an
+  // already-running daemon in milliseconds — deep inside its own short budget.
+  const boot = await ensureDaemon<PingProtocol>(options())
+  await expect(boot.request('ping')).resolves.toBe('pong')
+  await boot.dispose()
+
+  const client = await ensureDaemon<PingProtocol>({ ...options(), timeoutMs: 300 })
+  await expect(client.request('ping')).resolves.toBe('pong')
+
+  // Let the short timeoutMs elapse in the background. The client is healthy and
+  // idle; `ensureDaemon` already returned successfully before this point.
+  await delay(500)
+
+  // Kill and revive the daemon: a healthy client must still heal itself. Before
+  // the fix, `AbortSignal.timeout(300)` fired at the 300ms mark and had already
+  // been wired into this client's shutdown signal, so reconnect was dead.
+  const { pid } = JSON.parse(readFileSync(pidPath, 'utf8')) as { pid: number }
+  process.kill(pid, 'SIGKILL')
+  await delay(500)
+  const revived = await ensureDaemon<PingProtocol>(options())
+
+  let reconnected = false
+  const deadline = Date.now() + 15_000
+  while (Date.now() < deadline) {
+    try {
+      if ((await client.request('ping')) === 'pong') {
+        reconnected = true
+        break
+      }
+    } catch {
+      // mid-reconnect: the in-flight request aborts; keep polling.
+    }
+    await delay(250)
+  }
+  expect(reconnected).toBe(true)
+
+  await client.dispose()
+  await revived.dispose()
+})
+
+// Finding 2: the hardened `connectWithRetry` abort/timeout boundary (the
+// `timedOut()`-before-sleep check plus the try/catch around `delay()` that
+// distinguishes budget exhaustion from caller abort) had zero coverage — both
+// timing tests above resolve inside `spawnDaemon`, never reaching this loop.
+//
+// These drive `connectWithRetry` directly rather than through `ensureDaemon`.
+// A black-box attempt through `ensureDaemon` was tried first (per the review's
+// own instructions) using a fixture daemon that binds briefly then goes dark:
+// it is NOT reliably reachable. A raw `connect()` succeeds the instant the
+// kernel queues it into the listening socket's backlog, independent of
+// anything the server does afterward — even an immediate `destroy()` or a
+// self-`SIGKILL` reacting to the very first connection. Since
+// `connectWithRetry`'s own first attempt fires immediately after
+// `spawnDaemon`'s probe succeeds, it routinely lands in the same backlog batch
+// as that probe and "succeeds" at the raw-socket level before any server-side
+// reaction can matter — `createDaemonClient` never awaits a protocol
+// handshake, so this makes the whole `ensureDaemon` call resolve on attempt 1,
+// never reaching the retry loop at all. Empirically this held for a reactive
+// destroy-on-connection fixture, a reactive self-SIGKILL fixture, and a sweep
+// of proactive fixed-delay-then-close windows (5-80ms): each window was either
+// too short for `spawnDaemon`'s own probe to ever observe "live" (boot-crash
+// failure, connectWithRetry never reached) or long enough that the very first
+// retry attempt slipped through as a spurious success — no width reliably
+// threaded both needles. `connectWithRetry` is exported (see its doc comment)
+// specifically because of this.
+const CONNECT_INTERVAL_MS = 20
+
+test('budget exhaustion mid-retry throws a timeout Error, not AbortError', async () => {
+  // Nothing is listening at this path, ever — connect attempts fail with
+  // ENOENT deterministically, no race, for as long as the test needs.
+  const deadPath = join(dir, 'nothing-here.sock')
+  const deadline = createDeadline(400)
+
+  const started = Date.now()
+  let caught: unknown
+  try {
+    await connectWithRetry<PingProtocol>(
+      { app: APP, entry, intervalMs: CONNECT_INTERVAL_MS },
+      deadPath,
+      deadline,
+    )
+  } catch (err) {
+    caught = err
+  }
+  expect(caught).toBeInstanceOf(Error)
+  expect((caught as Error).name).not.toBe('AbortError')
+  expect((caught as Error).message).toMatch(/ensureDaemon timed out.*budget exhausted/i)
+  expect(Date.now() - started).toBeLessThan(1500)
+})
+
+test('a caller abort mid-retry propagates the original AbortError untouched', async () => {
+  const deadPath = join(dir, 'nothing-here.sock')
+  const controller = new AbortController()
+  // A generous overall budget: the abort, not the deadline's own timeout, must
+  // be what ends this call.
+  const deadline = createDeadline(10_000, controller.signal)
+  setTimeout(() => controller.abort(), 200)
+
+  const started = Date.now()
+  let caught: unknown
+  try {
+    await connectWithRetry<PingProtocol>(
+      { app: APP, entry, intervalMs: CONNECT_INTERVAL_MS },
+      deadPath,
+      deadline,
+    )
+  } catch (err) {
+    caught = err
+  }
+  expect((caught as Error).name).toBe('AbortError')
+  expect(Date.now() - started).toBeLessThan(1500)
 })

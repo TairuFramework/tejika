@@ -33,6 +33,20 @@ let socketPath: string
 let pidPath: string
 let logPath: string
 
+// `Promise.allSettled`'s ambient typing applies the `Awaited<T>` conditional
+// type to each element, which forces `tsc` to check whether `Client<Protocol>`
+// itself is thenable — a structural check over its generic `request` /
+// `createStream` / `createChannel` signatures that blows the instantiation
+// depth limit (TS2589). `.then()` does not go through `Awaited<T>` (its
+// resolved-value type is just the promise's own type parameter), so settling
+// by hand here avoids the recursion without changing behavior.
+function settle<Value>(promise: Promise<Value>): Promise<PromiseSettledResult<Value>> {
+  return promise.then(
+    (value): PromiseSettledResult<Value> => ({ status: 'fulfilled', value }),
+    (reason): PromiseSettledResult<Value> => ({ status: 'rejected', reason }),
+  )
+}
+
 const options = () => ({
   app: APP,
   entry,
@@ -72,21 +86,39 @@ test('spawns a daemon and returns a working client', { timeout: 30_000 }, async 
 test('two concurrent cold starts both get a working client', {
   timeout: 60_000,
 }, async () => {
-  const results = await Promise.allSettled([
-    ensureDaemon<PingProtocol>(options()),
-    ensureDaemon<PingProtocol>(options()),
-  ])
+  // Two bare `await`s on already-started promises (not `Promise.all`/
+  // `allSettled`) — see the `settle` comment above: any combinator whose
+  // ambient typing runs `Client<Protocol>` through the generic `Awaited<T>`
+  // conditional type, even indirectly via a tuple literal, hits TS2589.
+  const settledA = settle(ensureDaemon<PingProtocol>(options()))
+  const settledB = settle(ensureDaemon<PingProtocol>(options()))
+  const results = [await settledA, await settledB]
 
-  const rejected = results.filter((r) => r.status === 'rejected')
-  expect(
-    rejected.map((r) => `${(r.reason as Error).name}: ${(r.reason as Error).message}`),
-  ).toEqual([])
+  // A plain `for...of` with narrowing, rather than `.filter()`/`.map()` on
+  // the results array — those generic array-method overloads independently
+  // hit the same `Client<Protocol>`-vs-`Awaited<T>` TS2589 recursion (see
+  // above) even with no `Promise` combinator in sight.
+  const rejectedMessages: Array<string> = []
+  const clients: Array<Client<PingProtocol>> = []
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      const reason = result.reason as Error
+      rejectedMessages.push(`${reason.name}: ${reason.message}`)
+    } else {
+      clients.push(result.value)
+    }
+  }
+  expect(rejectedMessages).toEqual([])
 
-  const clients = results.map((r) => (r as PromiseFulfilledResult<Client<PingProtocol>>).value)
+  // `.map()` over `Array<Client<Protocol>>` hits the same TS2589 as above —
+  // resolving the callback's inferred `client` parameter type forces the same
+  // structural check on `Client<Protocol>`. A `for...of` sidesteps it.
+  const disposals: Array<Promise<void>> = []
   for (const client of clients) {
     await expect(client.request('ping')).resolves.toBe('pong')
+    disposals.push(client.dispose())
   }
-  await Promise.all(clients.map((client) => client.dispose()))
+  await Promise.all(disposals)
 })
 
 // The same flagship scenario in the configuration the README actually documents:
@@ -114,26 +146,36 @@ test('two concurrent cold starts with a defaulted pidPath both get a working cli
     timeoutMs: 20_000,
   }
 
-  const results = await Promise.allSettled([
-    ensureDaemon<PingProtocol>(defaulted),
-    ensureDaemon<PingProtocol>(defaulted),
-  ])
+  // See the `settle` helper and its call sites above: `Promise.allSettled`/
+  // `.filter()`/`.map()` over `Client<Protocol>` (directly or wrapped) hits
+  // TS2589 — settle by hand and narrow with `for...of` instead.
+  const settledA = settle(ensureDaemon<PingProtocol>(defaulted))
+  const settledB = settle(ensureDaemon<PingProtocol>(defaulted))
+  const results = [await settledA, await settledB]
 
-  const rejected = results.filter((r) => r.status === 'rejected')
-  expect(
-    rejected.map((r) => `${(r.reason as Error).name}: ${(r.reason as Error).message}`),
-  ).toEqual([])
+  const rejectedMessages: Array<string> = []
+  const clients: Array<Client<PingProtocol>> = []
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      const reason = result.reason as Error
+      rejectedMessages.push(`${reason.name}: ${reason.message}`)
+    } else {
+      clients.push(result.value)
+    }
+  }
+  expect(rejectedMessages).toEqual([])
 
   // The parent must have handed the child the path it defaulted to, rather than
   // letting the child resolve its own: a divergent `env` would otherwise give
   // parent and child two different lockfiles.
   expect(readFileSync(pidPath, 'utf8')).toContain('"ready":true')
 
-  const clients = results.map((r) => (r as PromiseFulfilledResult<Client<PingProtocol>>).value)
+  const disposals: Array<Promise<void>> = []
   for (const client of clients) {
     await expect(client.request('ping')).resolves.toBe('pong')
+    disposals.push(client.dispose())
   }
-  await Promise.all(clients.map((client) => client.dispose()))
+  await Promise.all(disposals)
 })
 
 test('clears a stale socket file and boots anyway', { timeout: 30_000 }, async () => {

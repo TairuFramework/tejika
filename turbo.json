@@ -5,6 +5,10 @@
     "build:js": {
       "dependsOn": ["^clean"],
       "outputs": ["lib/**"]
+    },
+    "test": {
+      "dependsOn": ["^build:js"],
+      "cache": false
     }
   }
 }

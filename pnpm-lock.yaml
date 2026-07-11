@@ -28,8 +28,8 @@ catalogs:
       specifier: ^2.0.0
       version: 2.0.0
     '@types/node':
-      specifier: ^26.1.0
-      version: 26.1.0
+      specifier: ^26.1.1
+      version: 26.1.1
     '@types/react':
       specifier: ^19.2.17
       version: 19.2.17
@@ -43,8 +43,8 @@ catalogs:
       specifier: ^7.2.0
       version: 7.2.0
     hono:
-      specifier: ^4.12.26
-      version: 4.12.27
+      specifier: ^4.12.29
+      version: 4.12.29
     ink:
       specifier: ^7.1.0
       version: 7.1.0
@@ -92,7 +92,7 @@ importers:
         version: link:../test
       '@types/node':
         specifier: 'catalog:'
-        version: 26.1.0
+        version: 26.1.1
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.17
@@ -114,7 +114,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
-        version: 26.1.0
+        version: 26.1.1
 
   packages/process:
     dependencies:
@@ -139,7 +139,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
-        version: 26.1.0
+        version: 26.1.1
 
   packages/server:
     dependencies:
@@ -151,17 +151,17 @@ importers:
         version: 0.18.1
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.8(hono@4.12.27)
+        version: 2.0.8(hono@4.12.29)
       '@tejika/env':
         specifier: workspace:^
         version: link:../env
       hono:
         specifier: 'catalog:'
-        version: 4.12.27
+        version: 4.12.29
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
-        version: 26.1.0
+        version: 26.1.1
 
   packages/test:
     dependencies:
@@ -183,7 +183,7 @@ importers:
         version: 0.18.1
       '@types/node':
         specifier: 'catalog:'
-        version: 26.1.0
+        version: 26.1.1
 
   packages/ui:
     dependencies:
@@ -958,6 +958,9 @@ packages:
   '@types/node@26.1.0':
     resolution: {integrity: sha512-O0A1G3xPGy4w7AgQdAQYUlQ+BKk2Oovw8eRpofyp5KdBZULnbe+WqaOVNrm705SHphCiG4XHsACrSmPu1f+Kgw==}
 
+  '@types/node@26.1.1':
+    resolution: {integrity: sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==}
+
   '@types/react@19.2.17':
     resolution: {integrity: sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw==}
 
@@ -1363,8 +1366,8 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  hono@4.12.27:
-    resolution: {integrity: sha512-1yrb/+w6HWQJrUCLkJ2IF5jNIPvvFkblV5RNOYl6bV+OA6p9GLcMpHFFGTosSvHvcAUibuUukRqhlYI4z32C7Q==}
+  hono@4.12.29:
+    resolution: {integrity: sha512-1hNiRjawYrLq/4m3DQQjPGFg0VZkk4RjQJDff/excI6Dm9BiL75qxGrd7/c6YOxPdq6AscP3LiXhQ6fKFC1Waw==}
     engines: {node: '>=16.9.0'}
 
   http-cache-semantics@4.2.0:
@@ -2300,9 +2303,9 @@ snapshots:
   '@esbuild/win32-x64@0.28.1':
     optional: true
 
-  '@hono/node-server@2.0.8(hono@4.12.27)':
+  '@hono/node-server@2.0.8(hono@4.12.29)':
     dependencies:
-      hono: 4.12.27
+      hono: 4.12.29
 
   '@inkjs/ui@2.0.0(ink@7.1.0(@types/react@19.2.17)(react@19.2.7))':
     dependencies:
@@ -2701,6 +2704,10 @@ snapshots:
   '@types/http-cache-semantics@4.2.0': {}
 
   '@types/node@26.1.0':
+    dependencies:
+      undici-types: 8.3.0
+
+  '@types/node@26.1.1':
     dependencies:
       undici-types: 8.3.0
 
@@ -3186,7 +3193,7 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  hono@4.12.27: {}
+  hono@4.12.29: {}
 
   http-cache-semantics@4.2.0: {}
 

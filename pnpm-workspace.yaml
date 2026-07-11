@@ -11,12 +11,12 @@ catalog:
   '@enkaku/socket': ^0.18.1
   '@hono/node-server': ^2.0.8
   '@inkjs/ui': ^2.0.0
-  '@types/node': ^26.1.0
+  '@types/node': ^26.1.1
   '@types/react': ^19.2.17
   commander: ^15.0.0
   env-paths: ^4.0.0
   get-port: ^7.2.0
-  hono: ^4.12.26
+  hono: ^4.12.29
   ink: ^7.1.0
   ink-testing-library: ^4.0.0
   nano-spawn: ^2.1.0

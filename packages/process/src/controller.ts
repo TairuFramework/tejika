@@ -36,7 +36,9 @@ export type EnsureDaemonOptions = {
 // from a crash, as opposed to ENOENT for no file at all). Both, like
 // ECONNREFUSED, mean "nothing reachable here" and should route into the
 // stale-socket recovery path below rather than propagate as a hard failure.
-const CONNECT_CODES = new Set(['ECONNREFUSED', 'ENOENT', 'ENOTSOCK'])
+// ETIMEDOUT is `connectWithTimeout`'s own verdict: one attempt was too slow,
+// which is a reason to retry inside the budget, not to abandon the whole call.
+const CONNECT_CODES = new Set(['ECONNREFUSED', 'ENOENT', 'ENOTSOCK', 'ETIMEDOUT'])
 
 function isConnectError(err: unknown): boolean {
   return CONNECT_CODES.has((err as NodeJS.ErrnoException).code ?? '')
@@ -61,12 +63,14 @@ export async function connectWithRetry<Protocol extends ProtocolDefinition>(
   deadline: Deadline,
 ): Promise<Client<Protocol>> {
   const intervalMs = opts.intervalMs ?? 50
+  const connectTimeoutMs = opts.connectTimeoutMs ?? CONNECT_ATTEMPT_TIMEOUT_MS
   for (;;) {
     try {
       return await createDaemonClient<Protocol>({
         app: opts.app,
         socketPath,
-        connectTimeoutMs: opts.connectTimeoutMs ?? CONNECT_ATTEMPT_TIMEOUT_MS,
+        // Never let one attempt outlive the shared budget it is spending.
+        connectTimeoutMs: Math.min(connectTimeoutMs, deadline.remaining()),
         // The CALLER's own signal, not `deadline.signal`: this is the returned
         // client's permanent lifecycle signal (client.ts wires it straight to
         // `shutdown.abort()`, which permanently kills auto-reconnect). Passing
@@ -117,7 +121,9 @@ export async function ensureDaemon<Protocol extends ProtocolDefinition>(
     return await createDaemonClient<Protocol>({
       app: opts.app,
       socketPath,
-      connectTimeoutMs,
+      // Clamped to the budget: an unclamped 1000ms attempt against a 300ms
+      // `timeoutMs` would blow through the deadline this call is supposed to obey.
+      connectTimeoutMs: Math.min(connectTimeoutMs, deadline.remaining()),
       // The CALLER's own signal, not `deadline.signal` — see the matching
       // comment in `connectWithRetry`. This client may be handed back and used
       // for a long time; its reconnect lifecycle must not be tied to the

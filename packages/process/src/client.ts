@@ -26,13 +26,29 @@ export type CreateDaemonClientOptions = {
   connectTimeoutMs?: number
 }
 
+export type Backoff = {
+  /** The window the next delay is drawn from. Doubles per attempt, never shrinks. */
+  ceilingMs: number
+  /** The jittered sleep to actually perform: a uniform draw from `[0, ceilingMs)`. */
+  delayMs: number
+}
+
 /**
- * Full jitter: a uniform random value in `[0, ceiling)`. Without jitter, every
- * client of a restarted daemon reconnects in lockstep.
+ * Full jitter: sleep a uniform random value in `[0, ceiling)`. Without jitter,
+ * every client of a restarted daemon reconnects in lockstep.
+ *
+ * The ceiling MUST be carried separately from the sleep. Deriving the next
+ * ceiling from the previous jittered SLEEP (`ceiling = min(sleep * 2, MAX)`)
+ * reads like doubling but is not: each step multiplies the ceiling by
+ * `2 * random()`, whose expected log drifts by `ln2 - 1 ≈ -0.31`. The ceiling
+ * collapses geometrically and the delays reach 0 and stay there — a client whose
+ * daemon is down then reconnects at the timer floor forever, spinning the CPU and
+ * churning fds. Only a draw of exactly 1.0 every time hides it, which is why a
+ * test pinning `random = () => 1` saw nothing wrong.
  */
-export function nextBackoff(current: number, random: () => number = Math.random): number {
-  const ceiling = current === 0 ? RECONNECT_BASE_MS : Math.min(current * 2, RECONNECT_MAX_MS)
-  return random() * ceiling
+export function nextBackoff(ceilingMs: number, random: () => number = Math.random): Backoff {
+  const next = ceilingMs === 0 ? RECONNECT_BASE_MS : Math.min(ceilingMs * 2, RECONNECT_MAX_MS)
+  return { ceilingMs: next, delayMs: random() * next }
 }
 
 /**
@@ -40,14 +56,27 @@ export function nextBackoff(current: number, random: () => number = Math.random)
  * timeout of its own and leaks its `connect`/`error` listeners. This is the
  * local mitigation: on timeout the still-pending connect is destroyed when it
  * eventually settles, so no socket leaks.
+ *
+ * `connect` is injectable so the timeout path — which a real AF_UNIX connect
+ * essentially never takes — is testable.
  */
-async function connectWithTimeout(socketPath: string, timeoutMs: number): Promise<Socket> {
-  const pending = connectSocket(socketPath)
+export async function connectWithTimeout(
+  socketPath: string,
+  timeoutMs: number,
+  connect: (path: string) => Promise<Socket> = connectSocket,
+): Promise<Socket> {
+  const pending = connect(socketPath)
   let timer: NodeJS.Timeout | undefined
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
       void pending.then((socket) => socket.destroy()).catch(() => {})
-      reject(new Error(`Timed out connecting to ${socketPath}`))
+      // ETIMEDOUT, not a bare Error: `ensureDaemon` retries within its budget only
+      // for errors it recognises as connect failures (by `code`). Uncoded, a
+      // single slow connect attempt aborted the WHOLE ensureDaemon call instead of
+      // being retried.
+      const err = new Error(`Timed out connecting to ${socketPath}`) as NodeJS.ErrnoException
+      err.code = 'ETIMEDOUT'
+      reject(err)
     }, timeoutMs)
   })
   try {
@@ -78,7 +107,11 @@ export async function createDaemonTransport<Protocol extends ProtocolDefinition>
   const connectTimeoutMs = opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
   const firstSocket = await connectWithTimeout(socketPath, connectTimeoutMs)
 
-  let backoffMs = 0
+  // The ceiling is the state that must survive across attempts; the delay is a
+  // fresh draw from it each time. Conflating the two is what made the backoff
+  // decay to zero — see `nextBackoff`.
+  let ceilingMs = 0
+  let delayMs = 0
   // Aborted on dispose: cancels an in-flight backoff and stops the next reconnect,
   // so shutdown never opens a fresh socket after teardown.
   const shutdown = new AbortController()
@@ -100,7 +133,7 @@ export async function createDaemonTransport<Protocol extends ProtocolDefinition>
   const reconnectingTransport = (): SocketTransport<ServerMessage, ClientMessage> => {
     let self: SocketTransport<ServerMessage, ClientMessage>
     const source = async (): Promise<Socket> => {
-      if (backoffMs > 0) await delay(backoffMs, undefined, { signal: shutdown.signal })
+      if (delayMs > 0) await delay(delayMs, undefined, { signal: shutdown.signal })
       const socket = await connectWithTimeout(socketPath, connectTimeoutMs)
       if (shutdown.signal.aborted) {
         socket.destroy()
@@ -110,7 +143,8 @@ export async function createDaemonTransport<Protocol extends ProtocolDefinition>
       // Reset only once the connection has PROVEN stable. Resetting on connect
       // lets an accept-then-crash daemon churn at the base delay forever.
       const stable = setTimeout(() => {
-        backoffMs = 0
+        ceilingMs = 0
+        delayMs = 0
       }, RECONNECT_STABLE_MS)
       stable.unref()
       socket.once('close', () => {
@@ -127,7 +161,7 @@ export async function createDaemonTransport<Protocol extends ProtocolDefinition>
   // During shutdown, return nothing so the client tears down instead.
   const nextTransport = (): ClientTransportOf<Protocol> | undefined => {
     if (shutdown.signal.aborted) return undefined
-    backoffMs = nextBackoff(backoffMs)
+    ;({ ceilingMs, delayMs } = nextBackoff(ceilingMs))
     const transport = reconnectingTransport()
     currentTransport = transport
     return transport as unknown as ClientTransportOf<Protocol>

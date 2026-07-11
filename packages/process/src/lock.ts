@@ -1,4 +1,15 @@
-import { closeSync, openSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import {
+  closeSync,
+  fstatSync,
+  linkSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 
 /**
  * The on-disk lock. `ready` is false between claiming the lock and binding the
@@ -24,6 +35,9 @@ export type ClaimResult =
   | { lock: DaemonLock }
   | { conflict: LockRecord | null; inode: number | null }
 
+/** A record and the inode it was read from — captured together, from one descriptor. */
+export type LockEntry = { record: LockRecord | null; inode: number | null }
+
 function isLockRecord(value: unknown): value is LockRecord {
   if (typeof value !== 'object' || value === null) return false
   const record = value as Record<string, unknown>
@@ -36,24 +50,45 @@ function isLockRecord(value: unknown): value is LockRecord {
   )
 }
 
-/**
- * Read the record, or null when the file is absent, unreadable, or does not hold
- * a conforming record. Callers treat a corrupt record exactly as they treat a
- * missing one: stale.
- */
-export function readLockRecord(pidPath: string): LockRecord | null {
-  let raw: string
-  try {
-    raw = readFileSync(pidPath, 'utf8')
-  } catch {
-    return null
-  }
+function parseRecord(raw: string): LockRecord | null {
   try {
     const parsed: unknown = JSON.parse(raw)
     return isLockRecord(parsed) ? parsed : null
   } catch {
     return null
   }
+}
+
+/**
+ * Read the record and the inode it came from through a SINGLE open descriptor, so
+ * the pair cannot straddle a replacement of the file. Callers that reap after an
+ * await depend on that: the inode is what tells them the file they classified is
+ * still the file they are about to unlink.
+ */
+export function readLockEntry(pidPath: string): LockEntry {
+  let fd: number
+  try {
+    fd = openSync(pidPath, 'r')
+  } catch {
+    return { record: null, inode: null }
+  }
+  try {
+    const inode = fstatSync(fd).ino
+    return { record: parseRecord(readFileSync(fd, 'utf8')), inode }
+  } catch {
+    return { record: null, inode: null }
+  } finally {
+    closeSync(fd)
+  }
+}
+
+/**
+ * Read the record, or null when the file is absent, unreadable, or does not hold
+ * a conforming record. Callers treat a corrupt record exactly as they treat a
+ * missing one: stale.
+ */
+export function readLockRecord(pidPath: string): LockRecord | null {
+  return readLockEntry(pidPath).record
 }
 
 function inodeOf(pidPath: string): number | null {
@@ -64,18 +99,26 @@ function inodeOf(pidPath: string): number | null {
   }
 }
 
-function writeRecord(pidPath: string, record: LockRecord): void {
-  writeFileSync(pidPath, JSON.stringify(record), 'utf8')
+/**
+ * Write the record to a fresh sibling file. The full content exists before the
+ * file is ever given a name a reader could look up, which is what makes both the
+ * claim (`link`) and the update (`rename`) below atomic to any observer.
+ */
+function writeTempRecord(pidPath: string, record: LockRecord): string {
+  const tmpPath = `${pidPath}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`
+  writeFileSync(tmpPath, JSON.stringify(record), { encoding: 'utf8', flag: 'wx', mode: 0o600 })
+  return tmpPath
 }
 
 /**
- * Unlink the lockfile only if its inode still matches `expectedInode` (captured
- * now when omitted). Returns whether the file was removed.
+ * Unlink the lockfile only if its inode still matches `expectedInode`. Required,
+ * not optional: an unguarded reap is an unlink of whatever happens to sit at the
+ * path right now, which — after any await — may be a different daemon's live
+ * lock. Read the inode with `readLockEntry` at the same moment you read the
+ * record you are classifying. Returns whether the file was removed.
  */
-export function reapLockFile(pidPath: string, expectedInode?: number): boolean {
-  const expected = expectedInode ?? inodeOf(pidPath)
-  if (expected == null) return false
-  if (inodeOf(pidPath) !== expected) return false
+export function reapLockFile(pidPath: string, expectedInode: number): boolean {
+  if (inodeOf(pidPath) !== expectedInode) return false
   try {
     rmSync(pidPath)
     return true
@@ -85,35 +128,51 @@ export function reapLockFile(pidPath: string, expectedInode?: number): boolean {
 }
 
 /**
- * Take an exclusive claim on `pidPath` via `O_CREAT | O_EXCL` — the single atomic
- * primitive this design rests on. The winner alone may touch the socket file;
- * losers get the conflicting record (or null when it is corrupt) and must unlink
- * nothing.
+ * Take an exclusive claim on `pidPath` via `link()` — the single atomic primitive
+ * this design rests on. `link` fails with EEXIST when the name is taken, exactly
+ * like `O_EXCL`, but the name it creates is already complete: the record is
+ * written to a temp file first, so no racer can ever read the lockfile mid-write.
+ * (A create-then-write claim leaves a zero-byte file visible for a moment; a
+ * booter reading it there parses nothing, concludes "not-running", and reaps the
+ * winner's fresh lock — the very check-then-act this design exists to remove.)
+ *
+ * The winner alone may touch the socket file; losers get the conflicting record
+ * (or null when it is corrupt) with its inode, and must unlink nothing.
  */
 export function claimDaemonLock(pidPath: string, record: LockRecord): ClaimResult {
-  let fd: number
+  const held: LockRecord = { ...record }
+  const tmpPath = writeTempRecord(pidPath, held)
+
   try {
-    fd = openSync(pidPath, 'wx')
+    linkSync(tmpPath, pidPath)
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
-    // Capture the record and the inode together, so a caller reaping after an
-    // await can detect a racer that reclaimed the file in the meantime. The two
-    // syscalls are adjacent — the residual window this design accepts.
-    return { conflict: readLockRecord(pidPath), inode: inodeOf(pidPath) }
+    // The record and its inode come from one descriptor, so a caller reaping
+    // after an await can detect a racer that replaced the file in the meantime.
+    const entry = readLockEntry(pidPath)
+    return { conflict: entry.record, inode: entry.inode }
+  } finally {
+    // The lockfile is a second link to the same inode; ours is now redundant.
+    rmSync(tmpPath, { force: true })
   }
-  closeSync(fd)
-  writeRecord(pidPath, record)
-
-  const held: LockRecord = { ...record }
 
   return {
     lock: {
       record: held,
       markReady(): void {
         held.ready = true
-        // Unconditional: this both flips `ready` and recovers our lockfile if a
-        // racing reaper removed it or wrote its own record over ours.
-        writeRecord(pidPath, held)
+        // Rename, not truncate-and-write: an observer sees the old record or the
+        // new one, never an empty file. Unconditional, so it also recovers our
+        // lockfile if a racing reaper removed it or wrote its own record over
+        // ours. It replaces the inode, which only tightens the reap guard — a
+        // reaper still holding our pre-ready inode now refuses to unlink us.
+        const tmp = writeTempRecord(pidPath, held)
+        try {
+          renameSync(tmp, pidPath)
+        } catch (err) {
+          rmSync(tmp, { force: true })
+          throw err
+        }
       },
       release(): void {
         // Never remove a lockfile that is no longer ours.

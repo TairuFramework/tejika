@@ -1,7 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { getPIDPath } from '@tejika/env'
 import { createDeadline, type Deadline } from './deadline.js'
-import { type LockRecord, readLockRecord, reapLockFile } from './lock.js'
+import { type LockRecord, readLockEntry, reapLockFile } from './lock.js'
 import { probeSocket, type SocketProbe } from './socket.js'
 
 export type DaemonStatus =
@@ -71,6 +71,21 @@ export async function classifyRecord(
 }
 
 /**
+ * Classify the lockfile AND capture the inode it was read from. Any reap that
+ * follows must be guarded by that inode: classification is async, so by the time
+ * a caller acts on the verdict the file at `pidPath` may already be a different
+ * daemon's fresh lock.
+ */
+async function readStatus(
+  pidPath: string,
+  bootGraceMs: number,
+): Promise<{ status: DaemonStatus; inode: number | null }> {
+  const entry = readLockEntry(pidPath)
+  const status = await classifyRecord(entry.record, { bootGraceMs, now: Date.now() })
+  return { status, inode: entry.inode }
+}
+
+/**
  * Classify the daemon's lockfile. Pure: unlike the previous implementation this
  * never reaps a stale lockfile as a side effect. Reaping belongs to the boot
  * claim path, where it is inode-guarded.
@@ -81,10 +96,8 @@ export async function getDaemonStatus(opts: {
   bootGraceMs?: number
 }): Promise<DaemonStatus> {
   const pidPath = opts.pidPath ?? getPIDPath(opts.app)
-  return await classifyRecord(readLockRecord(pidPath), {
-    bootGraceMs: opts.bootGraceMs ?? DEFAULT_BOOT_GRACE_MS,
-    now: Date.now(),
-  })
+  const { status } = await readStatus(pidPath, opts.bootGraceMs ?? DEFAULT_BOOT_GRACE_MS)
+  return status
 }
 
 export type StopResult = {
@@ -115,14 +128,24 @@ function isGone(pid: number): boolean {
   }
 }
 
+/**
+ * Poll until the process exits. Budget exhausted returns false — the caller
+ * escalates or reports a timeout. A CALLER abort is not a timeout: its
+ * `AbortError` propagates untouched, out through `stopDaemon`, exactly as it does
+ * in every other waiter here. `timedOut()` is the arbiter, so the two are told
+ * apart even when the abort and the final timer land in the same tick.
+ */
 async function pollUntilGone(pid: number, deadline: Deadline): Promise<boolean> {
   for (;;) {
     if (isGone(pid)) return true
-    if (deadline.expired()) return false
+    if (deadline.timedOut()) return false
     try {
-      await delay(EXIT_POLL_INTERVAL_MS, undefined, { signal: deadline.signal })
-    } catch {
-      return isGone(pid)
+      await delay(Math.min(EXIT_POLL_INTERVAL_MS, deadline.remaining()), undefined, {
+        signal: deadline.signal,
+      })
+    } catch (err) {
+      if (deadline.timedOut()) return isGone(pid)
+      throw err
     }
   }
 }
@@ -144,13 +167,26 @@ function signalTolerantly(pid: number, signal: 'SIGTERM' | 'SIGKILL'): StopResul
   }
 }
 
+/**
+ * Stop the daemon named by the lockfile. A caller abort rejects with the original
+ * `AbortError` rather than resolving with a result — the daemon's fate is
+ * genuinely unknown at that point, and reporting a timeout would be a lie.
+ */
 export async function stopDaemon(opts: StopDaemonOptions): Promise<StopResult> {
   const pidPath = opts.pidPath ?? getPIDPath(opts.app)
-  const status = await getDaemonStatus({ app: opts.app, pidPath })
+  // Capture the inode with the record we classify. EVERY reap below happens after
+  // at least one await, so the file at `pidPath` may by then be a fresh lock a
+  // racing `runDaemon` claimed after correctly reaping the stale one we just read.
+  // Unlinking that would leave a live daemon with no lockfile: invisible to
+  // `getDaemonStatus`, unstoppable, and blocking the socket for every later boot.
+  const { status, inode } = await readStatus(pidPath, DEFAULT_BOOT_GRACE_MS)
+  const reap = (): void => {
+    if (inode != null) reapLockFile(pidPath, inode)
+  }
 
   if (status.state === 'not-running') return { stopped: false, reason: 'not-running' }
   if (status.state === 'stale') {
-    reapLockFile(pidPath)
+    reap()
     return { stopped: false, pid: status.pid, reason: 'not-running' }
   }
   if (status.state === 'running-not-owned') {
@@ -160,7 +196,7 @@ export async function stopDaemon(opts: StopDaemonOptions): Promise<StopResult> {
   const pid = status.pid
   const early = signalTolerantly(pid, 'SIGTERM')
   if (early != null) {
-    if (early.stopped) reapLockFile(pidPath)
+    if (early.stopped) reap()
     return early
   }
 
@@ -168,14 +204,14 @@ export async function stopDaemon(opts: StopDaemonOptions): Promise<StopResult> {
 
   const killTimeoutMs = opts.killTimeoutMs ?? 5_000
   if (await pollUntilGone(pid, createDeadline(killTimeoutMs, opts.signal))) {
-    reapLockFile(pidPath)
+    reap()
     return { stopped: true, pid }
   }
 
   const escalated = signalTolerantly(pid, 'SIGKILL')
   if (escalated != null && !escalated.stopped) return escalated
   if (await pollUntilGone(pid, createDeadline(SIGKILL_GRACE_MS, opts.signal))) {
-    reapLockFile(pidPath)
+    reap()
     return { stopped: true, pid }
   }
   return { stopped: false, pid, reason: 'timeout' }

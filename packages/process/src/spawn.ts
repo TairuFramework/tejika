@@ -1,6 +1,6 @@
 import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { getDataDir, getSocketPath } from '@tejika/env'
+import { getDataDir, getPIDPath, getSocketPath } from '@tejika/env'
 import spawn from 'nano-spawn'
 import { createDeadline, type Deadline } from './deadline.js'
 import { DaemonBootError } from './errors.js'
@@ -10,7 +10,7 @@ import { classifyRecord, DEFAULT_BOOT_GRACE_MS } from './status.js'
 
 export type SpawnDaemonOptions = {
   app: string
-  /** Entry script run with `node`. Receives `--socket-path <path>`, and `--pid-path <path>` when given. */
+  /** Entry script run with `node`. Always receives `--socket-path <path>` and `--pid-path <path>`. */
   entry: string
   args?: Array<string>
   socketPath?: string
@@ -41,11 +41,9 @@ function pending(): Promise<never> {
  * and let the socket wait run out its budget against the winner's socket.
  */
 async function anotherDaemonHoldsLock(
-  pidPath: string | undefined,
+  pidPath: string,
   childPID: number | undefined,
 ): Promise<boolean> {
-  // With no pidPath we cannot tell a concession from a crash; assume a crash.
-  if (pidPath == null) return false
   const record = readLockRecord(pidPath)
   if (record == null || record.pid === childPID) return false
   const status = await classifyRecord(record, {
@@ -64,14 +62,22 @@ async function anotherDaemonHoldsLock(
  */
 export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
   const socketPath = opts.socketPath ?? getSocketPath(opts.app)
+  // Defaulted here, exactly like `socketPath`, and passed to the child
+  // UNCONDITIONALLY. Leaving it undefined made the whole concession check below
+  // inert in the default configuration — the child still locked (`runDaemon`
+  // falls back to `getPIDPath(app)` too), but the parent had no path to read, so
+  // `anotherDaemonHoldsLock` was false and every losing child's exit became a
+  // `DaemonBootError`. Passing it explicitly also removes a parent/child
+  // divergence risk: @tejika/env's PID_PATH override could otherwise resolve
+  // differently in the child whenever `opts.env` differs from our own env.
+  const pidPath = opts.pidPath ?? getPIDPath(opts.app)
   const logPath = opts.logPath ?? join(getDataDir(opts.app), 'daemon.log')
   const deadline = opts.deadline ?? createDeadline(opts.timeoutMs ?? 3000, opts.signal)
 
   mkdirSync(dirname(logPath), { recursive: true })
   mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 })
 
-  const args = [opts.entry, '--socket-path', socketPath]
-  if (opts.pidPath != null) args.push('--pid-path', opts.pidPath)
+  const args = [opts.entry, '--socket-path', socketPath, '--pid-path', pidPath]
   if (opts.args != null) args.push(...opts.args)
 
   const logFD = openSync(logPath, 'a')
@@ -86,7 +92,7 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
       (child) => child.pid,
       () => undefined,
     )
-    if (await anotherDaemonHoldsLock(opts.pidPath, childPID)) return await pending()
+    if (await anotherDaemonHoldsLock(pidPath, childPID)) return await pending()
     throw new DaemonBootError(message, { logPath, cause })
   }
 

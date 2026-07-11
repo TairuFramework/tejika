@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import type { Client } from '@enkaku/client'
+import { appEnvVar } from '@tejika/env'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { connectWithRetry, ensureDaemon } from '../src/controller.js'
 import { createDeadline } from '../src/deadline.js'
@@ -14,6 +15,9 @@ const APP = 'tejika-test'
 const entry = fileURLToPath(new URL('./fixtures/daemon-entry.ts', import.meta.url))
 const hangEntry = fileURLToPath(new URL('./fixtures/hang-entry.ts', import.meta.url))
 const env = { NODE_OPTIONS: '--import tsx' }
+// @tejika/env's override for `getPIDPath(APP)`: lets a test exercise the DEFAULT
+// pid path without writing to the real state dir.
+const PID_PATH_VAR = appEnvVar(APP, 'PID_PATH')
 
 let dir: string
 let socketPath: string
@@ -39,6 +43,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await stopDaemon({ app: APP, pidPath }).catch(() => {})
+  delete process.env[PID_PATH_VAR]
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -67,6 +72,53 @@ test('two concurrent cold starts both get a working client', {
   expect(
     rejected.map((r) => `${(r.reason as Error).name}: ${(r.reason as Error).message}`),
   ).toEqual([])
+
+  const clients = results.map((r) => (r as PromiseFulfilledResult<Client<PingProtocol>>).value)
+  for (const client of clients) {
+    await expect(client.request('ping')).resolves.toBe('pong')
+  }
+  await Promise.all(clients.map((client) => client.dispose()))
+})
+
+// The same flagship scenario in the configuration the README actually documents:
+// `pidPath` OMITTED. `spawnDaemon` defaulted `socketPath` from `app` but never
+// defaulted `pidPath`, so the PARENT held `undefined`, `anotherDaemonHoldsLock`
+// short-circuited to `false`, and every losing child's exit became a
+// `DaemonBootError` again — while a healthy daemon was up. The child still used a
+// lockfile (`runDaemon` falls back to `getPIDPath(app)`), so the split-brain race
+// stayed closed; only the parent's concession check was dead. The test above never
+// caught it because it always passes `pidPath` explicitly.
+//
+// The default is redirected into the tmp dir through @tejika/env's PID_PATH
+// override: set on THIS process so the parent's `getPIDPath` resolves there, and
+// passed through `env` so the child resolves to the same file.
+test('two concurrent cold starts with a defaulted pidPath both get a working client', {
+  timeout: 60_000,
+}, async () => {
+  process.env[PID_PATH_VAR] = pidPath
+  const defaulted = {
+    app: APP,
+    entry,
+    socketPath,
+    logPath,
+    env: { ...env, [PID_PATH_VAR]: pidPath },
+    timeoutMs: 20_000,
+  }
+
+  const results = await Promise.allSettled([
+    ensureDaemon<PingProtocol>(defaulted),
+    ensureDaemon<PingProtocol>(defaulted),
+  ])
+
+  const rejected = results.filter((r) => r.status === 'rejected')
+  expect(
+    rejected.map((r) => `${(r.reason as Error).name}: ${(r.reason as Error).message}`),
+  ).toEqual([])
+
+  // The parent must have handed the child the path it defaulted to, rather than
+  // letting the child resolve its own: a divergent `env` would otherwise give
+  // parent and child two different lockfiles.
+  expect(readFileSync(pidPath, 'utf8')).toContain('"ready":true')
 
   const clients = results.map((r) => (r as PromiseFulfilledResult<Client<PingProtocol>>).value)
   for (const client of clients) {

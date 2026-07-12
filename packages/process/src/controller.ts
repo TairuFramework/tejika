@@ -147,11 +147,20 @@ export async function ensureDaemon<Protocol extends ProtocolDefinition>(
     // A refused connection on an existing socket file means a stale socket from a
     // crashed daemon. `forbidden` means another user's daemon is listening on it —
     // never unlink that.
-    // NOTE: this probe is not itself bounded by `deadline` (plain `connectSocket`,
-    // no timeout/signal) — a crack in the "one budget bounds the whole call"
-    // property. Low risk for a local AF_UNIX socket, left as-is rather than
-    // restructuring `probeSocket`.
-    if (existsSync(socketPath) && (await probeSocket(socketPath)) === 'dead') {
+    //
+    // The probe spends the same budget as everything else in this call, so it is
+    // bounded by what is left of it. `timeoutMs` must never reach 0 — that DISABLES
+    // the bound upstream rather than expiring instantly — but an exhausted budget is
+    // moot anyway: an abandoned probe rejects uncoded, classifies as `unknown`, and
+    // `unknown` is not `dead`, so nothing gets unlinked on a cancelled probe.
+    const probeOptions = {
+      timeoutMs: Math.max(1, Math.min(connectTimeoutMs, deadline.remaining())),
+      signal: deadline.signal,
+    }
+    if (
+      existsSync(socketPath) &&
+      (await probeSocket(socketPath, undefined, probeOptions)) === 'dead'
+    ) {
       safeRemove(socketPath)
     }
 

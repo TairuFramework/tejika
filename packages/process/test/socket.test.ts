@@ -2,9 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { type ConnectSocketOptions, connectSocket } from '@enkaku/socket'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createDeadline } from '../src/deadline.js'
-import { isSocketLive, probeSocket, waitForSocket } from '../src/socket.js'
+import { type ConnectSocket, isSocketLive, probeSocket, waitForSocket } from '../src/socket.js'
 
 let dir: string
 let socketPath: string
@@ -63,6 +64,36 @@ describe('probeSocket', () => {
     for (const code of ['EMFILE', 'ENFILE', 'ENOMEM', 'EAGAIN', 'EINTR', '']) {
       await expect(probeSocket(socketPath, failing(code))).resolves.toBe('unknown')
     }
+  })
+
+  // `ensureDaemon` probes a socket it may then unlink, and spends its own budget
+  // doing it — so the bound has to reach the connect. Passing no options at all
+  // leaves the probe on `connectSocket`'s 10s default, outside the caller's budget.
+  test('forwards its bound to the connect', async () => {
+    let seen: ConnectSocketOptions | undefined
+    const capturing: ConnectSocket = async (path, options) => {
+      seen = options
+      return await connectSocket(path, options)
+    }
+    await listen()
+    const signal = AbortSignal.timeout(1000)
+
+    await expect(probeSocket(socketPath, capturing, { timeoutMs: 250, signal })).resolves.toBe(
+      'live',
+    )
+    expect(seen).toEqual({ timeoutMs: 250, signal })
+  })
+
+  // An abandoned probe must never read as `dead`: `dead` is the verdict that
+  // authorises unlinking the socket file, and a probe cancelled by the caller's
+  // deadline has learned NOTHING about the daemon on the other end. It aborts with an
+  // uncoded reason, so it lands in the safe `unknown` bucket — a budget that runs out
+  // mid-probe cannot delete a live daemon's socket.
+  test('an abandoned probe is unknown, never dead', async () => {
+    await listen()
+    await expect(probeSocket(socketPath, undefined, { signal: AbortSignal.abort() })).resolves.toBe(
+      'unknown',
+    )
   })
 })
 

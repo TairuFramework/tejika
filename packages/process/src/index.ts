@@ -10,6 +10,7 @@ export { createDeadline, type Deadline } from './deadline.js'
 export { DaemonAlreadyRunningError, DaemonBootError } from './errors.js'
 export type { LockRecord } from './lock.js'
 export {
+  type ConnectSocket,
   classifyConnectError,
   isSocketLive,
   probeSocket,

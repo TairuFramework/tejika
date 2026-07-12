@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { connectSocket } from '@enkaku/socket'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { connectWithTimeout, createDaemonTransport, nextBackoff } from '../src/client.js'
+import type { ConnectSocket } from '../src/socket.js'
 import type { PingProtocol } from './fixtures/protocol.js'
 
 const RECONNECT_MAX_MS = 5000
@@ -84,15 +85,43 @@ describe('nextBackoff', () => {
 })
 
 describe('connectWithTimeout', () => {
+  /**
+   * A connect that never resolves on its own, and settles only by being abandoned —
+   * which is exactly the contract `connectSocket` honours: it rejects an abandoned
+   * attempt with `signal.reason`, having destroyed the pending socket.
+   */
+  const stalledConnect: ConnectSocket = (_path, options) =>
+    new Promise<Socket>((_resolve, reject) => {
+      options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), {
+        once: true,
+      })
+    })
+
   // The timeout error must carry a `code`: `ensureDaemon` decides whether to retry
   // an attempt within its budget by looking at `err.code`, so an uncoded timeout
-  // aborted the whole call on the first slow connect instead of retrying.
+  // aborted the whole call on the first slow connect instead of retrying. The whole
+  // reason the expiry aborts with an error of our own making, rather than letting
+  // `connectSocket` time out on its own, is to own this `code`.
   test('a timed-out connect rejects with an ETIMEDOUT-coded error', async () => {
-    const err = await connectWithTimeout('/nope.sock', 20, () => new Promise(() => {})).catch(
+    const err = await connectWithTimeout('/nope.sock', 20, stalledConnect).catch(
       (caught: unknown) => caught,
     )
     expect((err as NodeJS.ErrnoException).code).toBe('ETIMEDOUT')
     expect((err as Error).message).toMatch(/Timed out connecting/)
+  })
+
+  // The caller's signal abandons an in-flight connect, so a connect started just
+  // before dispose cannot outlive it. Its reason must reach the caller untouched:
+  // converting it into the timeout error would tell `ensureDaemon` to retry a call
+  // that was deliberately cancelled.
+  test("a caller abort abandons the connect and keeps the caller's own reason", async () => {
+    const control = new AbortController()
+    const reason = new Error('daemon client disposed')
+    const pending = connectWithTimeout('/nope.sock', 60_000, stalledConnect, control.signal).catch(
+      (caught: unknown) => caught,
+    )
+    control.abort(reason)
+    expect(await pending).toBe(reason)
   })
 })
 

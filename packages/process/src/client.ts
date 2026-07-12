@@ -9,6 +9,7 @@ import type {
 } from '@enkaku/protocol'
 import { connectSocket, SocketTransport } from '@enkaku/socket'
 import { getSocketPath } from '@tejika/env'
+import type { ConnectSocket } from './socket.js'
 
 /** Reconnect backoff bounds: start fast, cap at a few seconds. */
 const RECONNECT_BASE_MS = 250
@@ -69,37 +70,38 @@ export function nextBackoff(ceilingMs: number, random: () => number = Math.rando
 }
 
 /**
- * Connect, but never hang: `@enkaku/socket`'s `connectSocket` offers no connect
- * timeout of its own and leaks its `connect`/`error` listeners. This is the
- * local mitigation: on timeout the still-pending connect is destroyed when it
- * eventually settles, so no socket leaks.
+ * Connect under a bound whose expiry rejects with an ETIMEDOUT-coded error.
  *
- * `connect` is injectable so the timeout path — which a real AF_UNIX connect
- * essentially never takes — is testable.
+ * `connectSocket` bounds the connect itself and destroys the abandoned socket, so
+ * this does not race a timer against it. What it owns is the REJECTION: `ensureDaemon`
+ * decides whether an attempt is retryable within its budget by `err.code`, and the
+ * upstream timeout rejects with an uncoded `Error` — which would abort the whole call
+ * on the first slow connect instead of retrying it. Aborting with our own reason makes
+ * `connectSocket` reject with exactly that error, so upstream's timeout is disabled
+ * (`timeoutMs: 0`) and this timer is the only clock.
+ *
+ * `signal` (the caller's) also abandons the attempt, so an in-flight connect does not
+ * outlive a disposed client.
  */
 export async function connectWithTimeout(
   socketPath: string,
   timeoutMs: number,
-  connect: (path: string) => Promise<Socket> = connectSocket,
+  connect: ConnectSocket = connectSocket,
+  signal?: AbortSignal,
 ): Promise<Socket> {
-  const pending = connect(socketPath)
-  let timer: NodeJS.Timeout | undefined
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      void pending.then((socket) => socket.destroy()).catch(() => {})
-      // ETIMEDOUT, not a bare Error: `ensureDaemon` retries within its budget only
-      // for errors it recognises as connect failures (by `code`). Uncoded, a
-      // single slow connect attempt aborted the WHOLE ensureDaemon call instead of
-      // being retried.
-      const err = new Error(`Timed out connecting to ${socketPath}`) as NodeJS.ErrnoException
-      err.code = 'ETIMEDOUT'
-      reject(err)
-    }, timeoutMs)
-  })
+  const expiry = new AbortController()
+  const timer = setTimeout(() => {
+    const err = new Error(`Timed out connecting to ${socketPath}`) as NodeJS.ErrnoException
+    err.code = 'ETIMEDOUT'
+    expiry.abort(err)
+  }, timeoutMs)
   try {
-    return await Promise.race([pending, timeout])
+    return await connect(socketPath, {
+      timeoutMs: 0,
+      signal: signal == null ? expiry.signal : AbortSignal.any([expiry.signal, signal]),
+    })
   } finally {
-    if (timer != null) clearTimeout(timer)
+    clearTimeout(timer)
   }
 }
 
@@ -122,7 +124,7 @@ export type DaemonTransport<Protocol extends ProtocolDefinition> = {
  */
 export async function createDaemonTransport<Protocol extends ProtocolDefinition>(
   opts: CreateDaemonClientOptions,
-  connect: (path: string) => Promise<Socket> = connectSocket,
+  connect: ConnectSocket = connectSocket,
 ): Promise<DaemonTransport<Protocol>> {
   const socketPath = opts.socketPath ?? getSocketPath(opts.app)
   // The steady-state timeout. NOT the caller's first-connect clamp: this one is
@@ -147,23 +149,28 @@ export async function createDaemonTransport<Protocol extends ProtocolDefinition>
   const firstTransport = new SocketTransport<ServerMessage, ClientMessage>({ socket: firstSocket })
   firstSocket.once('close', () => void firstTransport.dispose())
 
-  // Track the live transport and its socket so `dispose()` can release both.
-  // Enkaku's `Transport.dispose` only closes the writer if a stream was ever
-  // lazily created, so a transport that was never read from or written to leaves
-  // its socket open — disposing it alone is not enough to free the connection.
+  // Track the live transport so `dispose()` can release it: disposing a transport
+  // now destroys the socket it opened (`@enkaku/socket` >= 0.19.1), so the transport
+  // is the only handle needed to free the connection.
   let currentTransport: SocketTransport<ServerMessage, ClientMessage> = firstTransport
-  let currentSocket: Socket = firstSocket
 
   const reconnectingTransport = (): SocketTransport<ServerMessage, ClientMessage> => {
     let self: SocketTransport<ServerMessage, ClientMessage>
     const source = async (): Promise<Socket> => {
       if (delayMs > 0) await delay(delayMs, undefined, { signal: shutdown.signal })
-      const socket = await connectWithTimeout(socketPath, connectTimeoutMs, connect)
+      const socket = await connectWithTimeout(
+        socketPath,
+        connectTimeoutMs,
+        connect,
+        shutdown.signal,
+      )
+      // The abort above abandons a connect still in flight; this catches the other
+      // half of the race — a connect that had already resolved when dispose landed,
+      // whose socket no transport will ever own.
       if (shutdown.signal.aborted) {
         socket.destroy()
         throw new Error('daemon client disposed')
       }
-      currentSocket = socket
       // Reset only once the connection has PROVEN stable. Resetting on connect
       // lets an accept-then-crash daemon churn at the base delay forever.
       const stable = setTimeout(() => {
@@ -195,20 +202,16 @@ export async function createDaemonTransport<Protocol extends ProtocolDefinition>
     transport: firstTransport as unknown as ClientTransportOf<Protocol>,
     handleTransportDisposed: nextTransport,
     handleTransportError: nextTransport,
-    // Releasing the transport and its socket here (not just aborting `shutdown`)
-    // matters when the seam is used bare, without a `Client` on top: a `Client`
-    // disposes the transport it holds, but a bare caller only ever sees
-    // `dispose()`, and an undisposed socket keeps the peer's server alive.
-    // Destroy AFTER the transport settles: its dispose closes the writer, which
-    // ends the socket — ending an already-destroyed socket would raise
-    // ERR_STREAM_DESTROYED on a socket whose error listener is already detached.
-    // `Disposer.dispose` never rejects (internal errors are routed to
-    // `onDisposeError`), so a single `.then` is enough; it is also idempotent,
-    // so a `Client` disposing it too is a no-op.
+    // Releasing the transport here (not just aborting `shutdown`) matters when the
+    // seam is used bare, without a `Client` on top: a `Client` disposes the transport
+    // it holds, but a bare caller only ever sees `dispose()`, and an undisposed
+    // socket keeps the peer's server alive. `SocketTransport.dispose` flushes the
+    // writer and then destroys the socket it opened — for every source shape,
+    // including a transport that was never read from — so this is enough to free the
+    // connection. It is idempotent, so a `Client` disposing it too is a no-op.
     dispose: () => {
       shutdown.abort()
-      const socket = currentSocket
-      void currentTransport.dispose().then(() => socket.destroy())
+      void currentTransport.dispose()
     },
   }
 }
@@ -219,7 +222,7 @@ export async function createDaemonTransport<Protocol extends ProtocolDefinition>
  */
 export async function createDaemonClient<Protocol extends ProtocolDefinition>(
   opts: CreateDaemonClientOptions,
-  connect?: (path: string) => Promise<Socket>,
+  connect?: ConnectSocket,
 ): Promise<Client<Protocol>> {
   const { transport, handleTransportDisposed, handleTransportError, dispose } =
     await createDaemonTransport<Protocol>(opts, connect)

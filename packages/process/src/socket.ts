@@ -1,8 +1,17 @@
 import { rmSync } from 'node:fs'
 import type { Socket } from 'node:net'
 import { setTimeout as delay } from 'node:timers/promises'
-import { connectSocket } from '@enkaku/socket'
+import { type ConnectSocketOptions, connectSocket } from '@enkaku/socket'
 import { createDeadline, type Deadline } from './deadline.js'
+
+/**
+ * The connect seam. `@enkaku/socket`'s own `connectSocket` is the default; the
+ * indirection exists so the slow and abandoned paths — which a real AF_UNIX connect
+ * essentially never takes — and errnos we cannot provoke for real (EMFILE) are
+ * testable. An implementation MUST abandon the attempt when `options.signal` aborts,
+ * and reject with `signal.reason`.
+ */
+export type ConnectSocket = (path: string, options?: ConnectSocketOptions) => Promise<Socket>
 
 /**
  * Only `dead` is load-bearing, and only `dead` is dangerous: it is the verdict
@@ -34,13 +43,19 @@ export function classifyConnectError(err: unknown): SocketProbe {
   return FORBIDDEN_CODES.has(code) ? 'forbidden' : 'unknown'
 }
 
-/** `connect` is injectable so errnos we cannot provoke for real (EMFILE) are testable. */
+/**
+ * `options` bounds the probe (`connectSocket` applies its own 10s default otherwise).
+ * A caller with a budget passes its deadline's signal: an abandoned probe rejects with
+ * an uncoded reason, which classifies as `unknown` — never `dead` — so cancelling a
+ * probe can never authorise unlinking a live daemon's socket.
+ */
 export async function probeSocket(
   socketPath: string,
-  connect: (path: string) => Promise<Socket> = connectSocket,
+  connect: ConnectSocket = connectSocket,
+  options?: ConnectSocketOptions,
 ): Promise<SocketProbe> {
   try {
-    const socket = await connect(socketPath)
+    const socket = await connect(socketPath, options)
     socket.destroy()
     return 'live'
   } catch (err) {
@@ -55,9 +70,10 @@ export async function probeSocket(
  */
 export async function isSocketLive(
   socketPath: string,
-  connect?: (path: string) => Promise<Socket>,
+  connect?: ConnectSocket,
+  options?: ConnectSocketOptions,
 ): Promise<boolean> {
-  return (await probeSocket(socketPath, connect)) !== 'dead'
+  return (await probeSocket(socketPath, connect, options)) !== 'dead'
 }
 
 export type WaitForSocketOptions = { deadline?: Deadline; interval?: number }

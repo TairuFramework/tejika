@@ -12,7 +12,9 @@ Both seams Sakui asked for now exist:
 - **P1 — `runDaemon({ createTransport })`.** An optional per-connection transport factory, `(socket: Socket) => ServerTransportOf<Protocol>`, defaulting to today's `new SocketTransport({ socket })`. Sakui can build the transport from the raw socket, wrapping the readable in its channel-token-signing `mapAsync` — which is the whole reason it kept a bespoke `createServer`/listen/chmod/pidfile/shutdown loop. That loop can go; the signing logic stays in Sakui's factory.
 - **P2 — `createDaemonTransport(opts)`.** Returns `{ transport, handleTransportDisposed, handleTransportError, dispose }`. Sakui passes the three hooks into its own `RuntimeClient` constructor and wires `dispose` to that client's teardown, deleting the ~60-line duplicated reconnect/backoff/dispose body from `controller.ts`.
 
-The reconnect machinery Sakui inherits is also better than the copy it deletes: full-jitter backoff that resets only after a connection has stayed up for a 2000ms stability window (resetting on connect lets an accept-then-crash daemon churn at the base delay forever), and a connect timeout, which `@enkaku/socket`'s `connectSocket` still lacks.
+The reconnect machinery Sakui inherits is also better than the copy it deletes: full-jitter backoff that resets only after a connection has stayed up for a 2000ms stability window (resetting on connect lets an accept-then-crash daemon churn at the base delay forever), and an ETIMEDOUT-coded connect bound that `ensureDaemon` can tell apart from a hard failure and retry.
+
+Note the floor this rests on: `@enkaku/socket` >= 0.19.1, where `connectSocket` bounds the connect itself and `SocketTransport.dispose` destroys the socket it opened. On 0.18.x a connect could hang forever and a disposed transport left its socket open.
 
 ## Half 2 — the cost: breaking changes to absorb
 

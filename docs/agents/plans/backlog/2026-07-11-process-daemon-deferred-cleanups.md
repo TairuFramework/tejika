@@ -16,9 +16,9 @@ None of these is a correctness bug today. Each is a small crack that the surroun
 
 Worth remembering **why** the mapping matters: `ESRCH` means the process is dead, but **`EPERM` means it is alive and owned by another user** — it must never be read as stale, because a stale verdict authorizes reaping the lockfile.
 
-## 3. `probeSocket` in `ensureDaemon` is not bounded by the deadline
+## 3. ~~`probeSocket` in `ensureDaemon` is not bounded by the deadline~~ — CLOSED
 
-`controller.ts` — the probe between a failed initial connect and the spawn is a plain connect with no timeout or signal, so it sits outside the "one budget bounds the whole call" property that `ensureDaemon` otherwise guarantees. Low risk in practice: it is a local AF_UNIX connect, which resolves or refuses near-instantly. It is commented in place. Close it properly if `probeSocket` ever grows a bound.
+Closed on the same branch, once `@enkaku/socket` 0.19.1 gave `connectSocket` a `timeoutMs`/`signal`: `probeSocket` and `isSocketLive` now forward a `ConnectSocketOptions`, and `ensureDaemon` passes what is left of its budget. An abandoned probe rejects uncoded and so classifies as `unknown` — never `dead` — so a cancelled probe cannot authorise unlinking a live daemon's socket.
 
 ## 4. `spawnDaemon` never creates `dirname(pidPath)`
 

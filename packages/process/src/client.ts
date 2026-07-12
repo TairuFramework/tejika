@@ -9,64 +9,179 @@ import type {
 } from '@enkaku/protocol'
 import { connectSocket, SocketTransport } from '@enkaku/socket'
 import { getSocketPath } from '@tejika/env'
+import type { ConnectSocket } from './socket.js'
 
 /** Reconnect backoff bounds: start fast, cap at a few seconds. */
 const RECONNECT_BASE_MS = 250
 const RECONNECT_MAX_MS = 5000
+/** A connection must stay open this long before the backoff resets. */
+const RECONNECT_STABLE_MS = 2000
+const DEFAULT_CONNECT_TIMEOUT_MS = 5000
 
 export type CreateDaemonClientOptions = {
   app: string
   socketPath?: string
+  /** Aborting stops reconnection. */
+  signal?: AbortSignal
+  /**
+   * Bound on each connect attempt of the PERMANENT reconnect loop. Default 5000ms.
+   * This value outlives the call that created the client, so it must never carry a
+   * per-call budget — see `initialConnectTimeoutMs`.
+   */
+  connectTimeoutMs?: number
+  /**
+   * Bound on the FIRST connect only. Defaults to `connectTimeoutMs`.
+   *
+   * Split from `connectTimeoutMs` because a caller with a total budget (see
+   * `ensureDaemon`) must clamp its first connect to whatever is left of that
+   * budget, yet the client it gets back is used long after the budget is spent. A
+   * single shared value baked the clamp into the reconnect loop: a cold start that
+   * consumed 9.99s of a 10s budget left the client reconnecting with an ~8ms
+   * connect timeout forever, so every later reconnect to a perfectly healthy
+   * daemon timed out, destroyed the socket that DID connect, and retried — a loop
+   * with no exit.
+   */
+  initialConnectTimeoutMs?: number
+}
+
+export type Backoff = {
+  /** The window the next delay is drawn from. Doubles per attempt, never shrinks. */
+  ceilingMs: number
+  /** The jittered sleep to actually perform: a uniform draw from `[0, ceilingMs)`. */
+  delayMs: number
 }
 
 /**
- * Connect an Enkaku `Client` to a running daemon, reconnecting automatically if
- * the daemon socket drops (e.g. the daemon is restarted after a rebuild). Throws
- * on the INITIAL connect if the socket is absent/refused, so `ensureDaemon` can
- * spawn the daemon; once connected, later drops are healed transparently.
+ * Full jitter: sleep a uniform random value in `[0, ceiling)`. Without jitter,
+ * every client of a restarted daemon reconnects in lockstep.
  *
- * A clean peer close yields a done-read in the client, which fires no reconnect
- * hook — so the transport is forced to dispose when its socket closes, routing
- * every drop through `handleTransportDisposed`. A reconnect attempt that can't
- * reach the daemon surfaces as a read error instead, so both hooks share the
- * same reconnect path (exponential backoff, reset on a live connect).
+ * The ceiling MUST be carried separately from the sleep. Deriving the next
+ * ceiling from the previous jittered SLEEP (`ceiling = min(sleep * 2, MAX)`)
+ * reads like doubling but is not: each step multiplies the ceiling by
+ * `2 * random()`, whose expected log drifts by `ln2 - 1 ≈ -0.31`. The ceiling
+ * collapses geometrically and the delays reach 0 and stay there — a client whose
+ * daemon is down then reconnects at the timer floor forever, spinning the CPU and
+ * churning fds. Only a draw of exactly 1.0 every time hides it, which is why a
+ * test pinning `random = () => 1` saw nothing wrong.
  */
-export async function createDaemonClient<Protocol extends ProtocolDefinition>(
-  opts: CreateDaemonClientOptions,
-): Promise<Client<Protocol>> {
-  const socketPath = opts.socketPath ?? getSocketPath(opts.app)
-  const firstSocket = await connectSocket(socketPath)
+export function nextBackoff(ceilingMs: number, random: () => number = Math.random): Backoff {
+  const next = ceilingMs === 0 ? RECONNECT_BASE_MS : Math.min(ceilingMs * 2, RECONNECT_MAX_MS)
+  return { ceilingMs: next, delayMs: random() * next }
+}
 
-  let backoffMs = 0
+/**
+ * Connect under a bound whose expiry rejects with an ETIMEDOUT-coded error.
+ *
+ * `connectSocket` bounds the connect itself and destroys the abandoned socket, so
+ * this does not race a timer against it. What it owns is the REJECTION: `ensureDaemon`
+ * decides whether an attempt is retryable within its budget by `err.code`, and the
+ * upstream timeout rejects with an uncoded `Error` — which would abort the whole call
+ * on the first slow connect instead of retrying it. Aborting with our own reason makes
+ * `connectSocket` reject with exactly that error, so upstream's timeout is disabled
+ * (`timeoutMs: 0`) and this timer is the only clock.
+ *
+ * `signal` (the caller's) also abandons the attempt, so an in-flight connect does not
+ * outlive a disposed client.
+ */
+export async function connectWithTimeout(
+  socketPath: string,
+  timeoutMs: number,
+  connect: ConnectSocket = connectSocket,
+  signal?: AbortSignal,
+): Promise<Socket> {
+  const expiry = new AbortController()
+  const timer = setTimeout(() => {
+    const err = new Error(`Timed out connecting to ${socketPath}`) as NodeJS.ErrnoException
+    err.code = 'ETIMEDOUT'
+    expiry.abort(err)
+  }, timeoutMs)
+  try {
+    return await connect(socketPath, {
+      timeoutMs: 0,
+      signal: signal == null ? expiry.signal : AbortSignal.any([expiry.signal, signal]),
+    })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+export type DaemonTransport<Protocol extends ProtocolDefinition> = {
+  transport: ClientTransportOf<Protocol>
+  handleTransportDisposed: () => ClientTransportOf<Protocol> | undefined
+  handleTransportError: () => ClientTransportOf<Protocol> | undefined
+  /** Abort reconnection; wire to the owning client's `disposing` event. */
+  dispose: () => void
+}
+
+/**
+ * The reconnect machinery, extracted from `createDaemonClient` so a consumer with
+ * its own `Client` subtype can reuse it. Throws on the INITIAL connect if the
+ * socket is absent or refused, so `ensureDaemon` can spawn the daemon; once
+ * connected, later drops are healed transparently.
+ *
+ * `connect` is injectable for the same reason it is on `connectWithTimeout`: a
+ * real AF_UNIX connect never takes the slow paths this must survive.
+ */
+export async function createDaemonTransport<Protocol extends ProtocolDefinition>(
+  opts: CreateDaemonClientOptions,
+  connect: ConnectSocket = connectSocket,
+): Promise<DaemonTransport<Protocol>> {
+  const socketPath = opts.socketPath ?? getSocketPath(opts.app)
+  // The steady-state timeout. NOT the caller's first-connect clamp: this one is
+  // reused by every reconnect for the whole life of the client.
+  const connectTimeoutMs = opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
+  const initialConnectTimeoutMs = opts.initialConnectTimeoutMs ?? connectTimeoutMs
+  const firstSocket = await connectWithTimeout(socketPath, initialConnectTimeoutMs, connect)
+
+  // The ceiling is the state that must survive across attempts; the delay is a
+  // fresh draw from it each time. Conflating the two is what made the backoff
+  // decay to zero — see `nextBackoff`.
+  let ceilingMs = 0
+  let delayMs = 0
   // Aborted on dispose: cancels an in-flight backoff and stops the next reconnect,
   // so shutdown never opens a fresh socket after teardown.
   const shutdown = new AbortController()
+  opts.signal?.addEventListener('abort', () => shutdown.abort(), { once: true })
 
-  // Build the first transport from an already-connected socket. The close
-  // listener is bound to THIS transport: when its socket closes, disposing it
-  // routes the drop through the client's handleTransportDisposed.
-  // SocketTransport<R, W>: R = messages read FROM the socket, W = messages
-  // written TO it. The client reads ServerMessage and writes ClientMessage, so
-  // the daemon's server transport mirrors this as <ClientMessage, ServerMessage>.
-  // The `as unknown as ClientTransportOf<Protocol>` cast below is required because
-  // ClientTransportOf is a branded protocol type, not structurally a SocketTransport.
+  // A clean peer close yields a done-read in the client, which fires no reconnect
+  // hook — so the transport is forced to dispose when its socket closes, routing
+  // every drop through `handleTransportDisposed`.
   const firstTransport = new SocketTransport<ServerMessage, ClientMessage>({ socket: firstSocket })
   firstSocket.once('close', () => void firstTransport.dispose())
 
-  // A reconnecting transport: its lazy socket source waits out the backoff
-  // (cancellable on shutdown), connects, resets the backoff, and binds the close
-  // listener to this same transport instance.
+  // Track the live transport so `dispose()` can release it: disposing a transport
+  // now destroys the socket it opened (`@enkaku/socket` >= 0.19.1), so the transport
+  // is the only handle needed to free the connection.
+  let currentTransport: SocketTransport<ServerMessage, ClientMessage> = firstTransport
+
   const reconnectingTransport = (): SocketTransport<ServerMessage, ClientMessage> => {
     let self: SocketTransport<ServerMessage, ClientMessage>
     const source = async (): Promise<Socket> => {
-      if (backoffMs > 0) await delay(backoffMs, undefined, { signal: shutdown.signal })
-      const socket = await connectSocket(socketPath)
+      if (delayMs > 0) await delay(delayMs, undefined, { signal: shutdown.signal })
+      const socket = await connectWithTimeout(
+        socketPath,
+        connectTimeoutMs,
+        connect,
+        shutdown.signal,
+      )
+      // The abort above abandons a connect still in flight; this catches the other
+      // half of the race — a connect that had already resolved when dispose landed,
+      // whose socket no transport will ever own.
       if (shutdown.signal.aborted) {
         socket.destroy()
         throw new Error('daemon client disposed')
       }
-      backoffMs = 0
-      socket.once('close', () => void self.dispose())
+      // Reset only once the connection has PROVEN stable. Resetting on connect
+      // lets an accept-then-crash daemon churn at the base delay forever.
+      const stable = setTimeout(() => {
+        ceilingMs = 0
+        delayMs = 0
+      }, RECONNECT_STABLE_MS)
+      stable.unref()
+      socket.once('close', () => {
+        clearTimeout(stable)
+        void self.dispose()
+      })
       return socket
     }
     self = new SocketTransport<ServerMessage, ClientMessage>({ socket: source })
@@ -77,17 +192,43 @@ export async function createDaemonClient<Protocol extends ProtocolDefinition>(
   // During shutdown, return nothing so the client tears down instead.
   const nextTransport = (): ClientTransportOf<Protocol> | undefined => {
     if (shutdown.signal.aborted) return undefined
-    backoffMs = backoffMs === 0 ? RECONNECT_BASE_MS : Math.min(backoffMs * 2, RECONNECT_MAX_MS)
-    return reconnectingTransport() as unknown as ClientTransportOf<Protocol>
+    ;({ ceilingMs, delayMs } = nextBackoff(ceilingMs))
+    const transport = reconnectingTransport()
+    currentTransport = transport
+    return transport as unknown as ClientTransportOf<Protocol>
   }
 
-  const client = new Client<Protocol>({
+  return {
     transport: firstTransport as unknown as ClientTransportOf<Protocol>,
     handleTransportDisposed: nextTransport,
     handleTransportError: nextTransport,
-  })
-  // Stop reconnecting before the client aborts its transport on dispose, so
-  // shutdown never opens a fresh socket after teardown.
-  client.events.on('disposing', () => shutdown.abort())
+    // Releasing the transport here (not just aborting `shutdown`) matters when the
+    // seam is used bare, without a `Client` on top: a `Client` disposes the transport
+    // it holds, but a bare caller only ever sees `dispose()`, and an undisposed
+    // socket keeps the peer's server alive. `SocketTransport.dispose` flushes the
+    // writer and then destroys the socket it opened — for every source shape,
+    // including a transport that was never read from — so this is enough to free the
+    // connection. It is idempotent, so a `Client` disposing it too is a no-op.
+    dispose: () => {
+      shutdown.abort()
+      void currentTransport.dispose()
+    },
+  }
+}
+
+/**
+ * Connect an Enkaku `Client` to a running daemon, reconnecting automatically if
+ * the daemon socket drops. A thin wrapper over `createDaemonTransport`.
+ */
+export async function createDaemonClient<Protocol extends ProtocolDefinition>(
+  opts: CreateDaemonClientOptions,
+  connect?: ConnectSocket,
+): Promise<Client<Protocol>> {
+  const { transport, handleTransportDisposed, handleTransportError, dispose } =
+    await createDaemonTransport<Protocol>(opts, connect)
+
+  const client = new Client<Protocol>({ transport, handleTransportDisposed, handleTransportError })
+  // Stop reconnecting before the client aborts its transport on dispose.
+  client.events.on('disposing', () => dispose())
   return client
 }

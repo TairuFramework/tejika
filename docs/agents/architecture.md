@@ -9,7 +9,7 @@ apps that compose these packages.
 ## Packages
 
 - **`@tejika/env`** — deterministic local paths, ports, and env-var overrides
-  (`getDataDir`, `getStateDir`, `getSocketPath`, `getPidPath`, `getPort`). The
+  (`getDataDir`, `getStateDir`, `getSocketPath`, `getPIDPath`, `getPort`). The
   foundational concern with no `@tejika` deps.
 - **`@tejika/process`** — local daemon lifecycle: detached spawn, foreground
   bootstrap, pidfile/split-brain guard, and Enkaku client management with

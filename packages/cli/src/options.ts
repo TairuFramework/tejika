@@ -53,6 +53,12 @@ export type WithPortOptions = {
  * is registered on — commander stores an option's value there — so a leaf action
  * reads an ancestor's `--port` with `optsWithGlobals()`, not `opts()`.
  *
+ * NOTE: without `exact`, an unset default is resolved by probing for a free port
+ * (`getPort`), which can silently hand back a DIFFERENT port than `opts.default` if
+ * that one is taken. That is the right behavior for a server command. For a client
+ * command that must dial a known port, pass `exact: true` — it resolves `default`
+ * verbatim (via `resolvePort`) instead of probing.
+ *
  * Without `exact`, the hook is async (it awaits `getPort`, which probes for a free
  * port). Commander chains the action after the hook's promise, so the action does
  * see the resolved `port` either way. The hazard is `parse()` itself: it is
@@ -68,6 +74,9 @@ export function withPort(cmd: Command, app: string, opts: WithPortOptions = {}):
   const { default: defaultPort, exact, host } = opts
   if (exact && defaultPort == null) {
     throw new Error('withPort requires a `default` port when `exact` is set')
+  }
+  if (defaultPort != null) {
+    parsePort(String(defaultPort), 'default')
   }
   cmd.option('-p, --port <port>', 'port number', parsePortArg)
   if (exact && defaultPort != null) {
@@ -87,14 +96,14 @@ export function withPort(cmd: Command, app: string, opts: WithPortOptions = {}):
 }
 
 /** LogTape's level set, which `@sozai/log` re-exports. */
-export const DEFAULT_LOG_LEVELS: Array<string> = [
+export const DEFAULT_LOG_LEVELS: ReadonlyArray<string> = Object.freeze([
   'trace',
   'debug',
   'info',
   'warning',
   'error',
   'fatal',
-]
+])
 
 export type WithLogLevelOptions = {
   /** Accepted levels. Defaults to `DEFAULT_LOG_LEVELS`. */
@@ -109,7 +118,9 @@ export function withLogLevel(cmd: Command, opts: WithLogLevelOptions = {}): Comm
   const defaultLevel = opts.default ?? 'warning'
   if (!levels.includes(defaultLevel)) {
     throw new Error(
-      `withLogLevel default \`${defaultLevel}\` is not one of the allowed levels: ${levels.join(', ')}`,
+      opts.default == null
+        ? `withLogLevel: the built-in default \`${defaultLevel}\` is not in the supplied levels (${levels.join(', ')}) — pass an explicit \`default\`.`
+        : `withLogLevel default \`${defaultLevel}\` is not one of the allowed levels: ${levels.join(', ')}`,
     )
   }
   const option = new Option('-l, --log-level <level>', 'log level')

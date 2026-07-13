@@ -95,6 +95,12 @@ describe('withPort', () => {
     expect(() => withPort(new Command(), 'myapp', { exact: true })).toThrow(/requires a `default`/)
   })
 
+  test('an invalid default throws at registration, even without exact', () => {
+    expect(() => withPort(new Command(), 'myapp', { default: 0 })).toThrow(
+      /not a valid port number|Invalid port number/,
+    )
+  })
+
   test("writes the default to the option's own command, not the leaf action", async () => {
     process.env.MYAPP_PORT = '7777'
     const { program, sub } = programAndSubCommand((cmd) => withPort(cmd, 'myapp'))
@@ -178,6 +184,12 @@ describe('withLogLevel choices', () => {
     expect(() =>
       withLogLevel(new Command(), { levels: ['quiet', 'loud'], default: 'nope' }),
     ).toThrow(/`nope`.*quiet, loud/)
+  })
+
+  test('custom levels excluding the implicit `warning` default throw, blaming the built-in default', () => {
+    expect(() => withLogLevel(new Command(), { levels: ['quiet', 'loud'] })).toThrow(
+      /built-in default `warning` is not in the supplied levels \(quiet, loud\)/,
+    )
   })
 })
 

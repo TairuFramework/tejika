@@ -50,12 +50,12 @@ export type GetPortOptions = {
  * server holding it and hand back a port nothing is listening on.
  */
 export async function getPort(app: string, opts: GetPortOptions = {}): Promise<number> {
+  if (opts.default != null) {
+    assertPort(opts.default)
+  }
   const override = getAppEnvVar(app, 'PORT')
   if (override != null) {
     return parsePort(override, appEnvVar(app, 'PORT'))
-  }
-  if (opts.default != null) {
-    assertPort(opts.default)
   }
   return getAvailablePort({ port: opts.default, host: opts.host })
 }
@@ -66,9 +66,10 @@ export async function getPort(app: string, opts: GetPortOptions = {}): Promise<n
  * counterpart of `getPort`.
  */
 export function resolvePort(app: string, defaultPort: number): number {
+  assertPort(defaultPort)
   const override = getAppEnvVar(app, 'PORT')
   if (override != null) {
     return parsePort(override, appEnvVar(app, 'PORT'))
   }
-  return assertPort(defaultPort)
+  return defaultPort
 }

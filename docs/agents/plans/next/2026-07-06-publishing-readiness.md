@@ -48,6 +48,27 @@ local dev. `@inkjs/ui` stays a regular dep (or peer alongside ink).
   (blank npm pages). Expand root README with the package table + install/usage;
   add per-package READMEs.
 
+## Breaking changes to record in release notes
+
+The 2026-07-13 port-and-CLI-option-validation branch shipped these breaking
+changes to `@tejika/env` and `@tejika/cli`. There is no changesets
+infrastructure in this repo (see H5 above) — do not add any — so these must be
+written into the release notes by hand when these packages are next published:
+
+- `@tejika/env`: `getPort` (and `resolvePort`) now throw on `<APP>_PORT`
+  override values they previously accepted via a loose `parseInt`: `'80abc'`,
+  `'80.5'`, `'0x50'`, `0`, `-1`, `70000`.
+- `@tejika/cli`: `--port` is now parsed into a `number` by an argParser;
+  previously it was passed through as a raw `string` when supplied on the
+  command line.
+- `@tejika/cli`: a leaf action can no longer read an ancestor command's
+  `--port`/`--socket-path` via `opts()` (or its `action` handler's `options`
+  argument) — the resolved default now lands on the option's owning command,
+  not the leaf. Callers must use `optsWithGlobals()` instead.
+- `@tejika/cli`: `runInk` no longer suppresses Ctrl+C (it forced
+  `exitOnCtrlC: false`, inverting Ink's own default). An app that wants to
+  intercept Ctrl+C itself must now pass `{ exitOnCtrlC: false }` explicitly.
+
 ## Acceptance
 
 - A consumer app with its own `react`/`ink` gets a single React instance

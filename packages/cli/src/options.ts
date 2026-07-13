@@ -105,8 +105,15 @@ export type WithLogLevelOptions = {
 
 /** Add `-l, --log-level <level>`, restricted to `levels` and defaulting to `warning`. */
 export function withLogLevel(cmd: Command, opts: WithLogLevelOptions = {}): Command {
+  const levels = opts.levels ?? DEFAULT_LOG_LEVELS
+  const defaultLevel = opts.default ?? 'warning'
+  if (!levels.includes(defaultLevel)) {
+    throw new Error(
+      `withLogLevel default \`${defaultLevel}\` is not one of the allowed levels: ${levels.join(', ')}`,
+    )
+  }
   const option = new Option('-l, --log-level <level>', 'log level')
-    .choices(opts.levels ?? DEFAULT_LOG_LEVELS)
-    .default(opts.default ?? 'warning')
+    .choices(levels)
+    .default(defaultLevel)
   return cmd.addOption(option)
 }

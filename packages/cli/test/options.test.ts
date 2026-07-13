@@ -173,6 +173,12 @@ describe('withLogLevel choices', () => {
   test('exposes the LogTape level set', () => {
     expect(DEFAULT_LOG_LEVELS).toEqual(['trace', 'debug', 'info', 'warning', 'error', 'fatal'])
   })
+
+  test('a default outside the level set throws at registration', () => {
+    expect(() =>
+      withLogLevel(new Command(), { levels: ['quiet', 'loud'], default: 'nope' }),
+    ).toThrow(/`nope`.*quiet, loud/)
+  })
 })
 
 describe('withLogLevel', () => {

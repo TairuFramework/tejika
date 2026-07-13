@@ -1,17 +1,27 @@
 import { getPort, getSocketPath, parsePort, resolvePort } from '@tejika/env'
-import { type Command, InvalidArgumentError } from 'commander'
+import { type Command, InvalidArgumentError, Option } from 'commander'
+
+export type WithSocketPathOptions = {
+  /** Resolve a named socket (`<name>.sock`) under the app data dir. */
+  name?: string
+}
 
 /**
- * Add `-s, --socket-path <path>`. The default is resolved lazily from
- * `@tejika/env` at action time (via a preAction hook), not at registration, so
- * an env override set after the program is built is still honored and option
- * registration stays synchronous.
+ * Add `-s, --socket-path <path>`. The default is resolved lazily from `@tejika/env`
+ * at action time (via a preAction hook), not at registration, so an env override set
+ * after the program is built is still honored and option registration stays
+ * synchronous. The hook targets the command the option is registered on; a leaf
+ * action reads an ancestor's value with `optsWithGlobals()`.
  */
-export function withSocketPath(cmd: Command, app: string): Command {
+export function withSocketPath(
+  cmd: Command,
+  app: string,
+  opts: WithSocketPathOptions = {},
+): Command {
   cmd.option('-s, --socket-path <path>', 'unix socket path')
-  cmd.hook('preAction', (_thisCmd, actionCmd) => {
-    if (actionCmd.opts().socketPath == null) {
-      actionCmd.setOptionValue('socketPath', getSocketPath(app))
+  cmd.hook('preAction', (thisCmd) => {
+    if (thisCmd.opts().socketPath == null) {
+      thisCmd.setOptionValue('socketPath', getSocketPath(app, opts.name))
     }
   })
   return cmd
@@ -76,7 +86,27 @@ export function withPort(cmd: Command, app: string, opts: WithPortOptions = {}):
   return cmd
 }
 
-/** Add `-l, --log-level <level>` with a static `warning` default. */
-export function withLogLevel(cmd: Command): Command {
-  return cmd.option('-l, --log-level <level>', 'log level', 'warning')
+/** LogTape's level set, which `@sozai/log` re-exports. */
+export const DEFAULT_LOG_LEVELS: Array<string> = [
+  'trace',
+  'debug',
+  'info',
+  'warning',
+  'error',
+  'fatal',
+]
+
+export type WithLogLevelOptions = {
+  /** Accepted levels. Defaults to `DEFAULT_LOG_LEVELS`. */
+  levels?: Array<string>
+  /** Default level. Defaults to `warning`. */
+  default?: string
+}
+
+/** Add `-l, --log-level <level>`, restricted to `levels` and defaulting to `warning`. */
+export function withLogLevel(cmd: Command, opts: WithLogLevelOptions = {}): Command {
+  const option = new Option('-l, --log-level <level>', 'log level')
+    .choices(opts.levels ?? DEFAULT_LOG_LEVELS)
+    .default(opts.default ?? 'warning')
+  return cmd.addOption(option)
 }

@@ -1,9 +1,10 @@
 import { Command } from 'commander'
 import { afterEach, describe, expect, test } from 'vitest'
-import { withLogLevel, withPort } from '../src/options.js'
+import { DEFAULT_LOG_LEVELS, withLogLevel, withPort, withSocketPath } from '../src/options.js'
 
 afterEach(() => {
   delete process.env.MYAPP_PORT
+  delete process.env.MYAPP_SOCKET_PATH
 })
 
 /** Build `parent [-p <port>] sub`, capturing what the subcommand action sees. */
@@ -100,6 +101,77 @@ describe('withPort', () => {
     await program.parseAsync(['sub'], { from: 'user' })
     expect(program.opts().port).toBe(7777)
     expect(sub.opts().port).toBeUndefined()
+  })
+
+  test("exact mode writes the default to the option's own command, not the leaf action", () => {
+    const { program, sub } = programAndSubCommand((cmd) =>
+      withPort(cmd, 'myapp', { default: 4000, exact: true }),
+    )
+    program.parse(['sub'], { from: 'user' })
+    expect(program.opts().port).toBe(4000)
+    expect(sub.opts().port).toBeUndefined()
+  })
+})
+
+describe('withSocketPath', () => {
+  test('injects the env-resolved default when no flag is given', async () => {
+    process.env.MYAPP_SOCKET_PATH = '/tmp/from-env.sock'
+    const { program, seen } = programWithSubcommand((cmd) => withSocketPath(cmd, 'myapp'))
+    await program.parseAsync(['sub'], { from: 'user' })
+    expect(seen().socketPath).toBe('/tmp/from-env.sock')
+  })
+
+  test('an explicit flag on the parent beats the default', async () => {
+    process.env.MYAPP_SOCKET_PATH = '/tmp/from-env.sock'
+    const { program, seen } = programWithSubcommand((cmd) => withSocketPath(cmd, 'myapp'))
+    await program.parseAsync(['-s', '/tmp/flag.sock', 'sub'], { from: 'user' })
+    expect(seen().socketPath).toBe('/tmp/flag.sock')
+  })
+
+  test('a named socket resolves under the data dir, ignoring the path override', async () => {
+    process.env.MYAPP_SOCKET_PATH = '/tmp/from-env.sock'
+    process.env.MYAPP_DATA_DIR = '/tmp/data'
+    const { program, seen } = programWithSubcommand((cmd) =>
+      withSocketPath(cmd, 'myapp', { name: 'worker' }),
+    )
+    await program.parseAsync(['sub'], { from: 'user' })
+    expect(seen().socketPath).toBe('/tmp/data/worker.sock')
+    delete process.env.MYAPP_DATA_DIR
+  })
+
+  test("writes the default to the option's own command, not the leaf action", async () => {
+    process.env.MYAPP_SOCKET_PATH = '/tmp/from-env.sock'
+    const { program, sub } = programAndSubCommand((cmd) => withSocketPath(cmd, 'myapp'))
+    await program.parseAsync(['sub'], { from: 'user' })
+    expect(program.opts().socketPath).toBe('/tmp/from-env.sock')
+    expect(sub.opts().socketPath).toBeUndefined()
+  })
+})
+
+describe('withLogLevel choices', () => {
+  test('accepts a listed level', async () => {
+    const { program, seen } = programWithSubcommand((cmd) => withLogLevel(cmd))
+    await program.parseAsync(['-l', 'debug', 'sub'], { from: 'user' })
+    expect(seen().logLevel).toBe('debug')
+  })
+
+  test('rejects an unlisted level', async () => {
+    const { program } = programWithSubcommand((cmd) => withLogLevel(cmd))
+    await expect(program.parseAsync(['-l', 'verbose', 'sub'], { from: 'user' })).rejects.toThrow(
+      /Allowed choices are/,
+    )
+  })
+
+  test('accepts a caller-supplied level set and default', async () => {
+    const { program, seen } = programWithSubcommand((cmd) =>
+      withLogLevel(cmd, { levels: ['quiet', 'loud'], default: 'loud' }),
+    )
+    await program.parseAsync(['sub'], { from: 'user' })
+    expect(seen().logLevel).toBe('loud')
+  })
+
+  test('exposes the LogTape level set', () => {
+    expect(DEFAULT_LOG_LEVELS).toEqual(['trace', 'debug', 'info', 'warning', 'error', 'fatal'])
   })
 })
 

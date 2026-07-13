@@ -23,8 +23,14 @@ version) as the first step — it affects every package.json edit below.
 
 - **`@tejika/env`**: `getDataDir(app)`, `getStateDir(app)`,
   `getSocketPath(app, name?)`, `getPIDPath(app)`,
-  `getPort(app, opts?: { default?: number })`, `appEnvVar(app, key)`.
-  Each resolver honours an `<APP>_<KEY>` env override first.
+  `getPort(app, opts?: { default?: number; host?: string })`,
+  `resolvePort(app, defaultPort)` (sync, non-probing client-side counterpart of
+  `getPort`), `parsePort(value, label?)` (the shared strict port validator: an
+  integer in `1..65535`, rejecting `'80abc'`/`'80.5'`/`'0x50'`/`0`), `appEnvVar(app, key)`.
+  Each resolver honours an `<APP>_<KEY>` env override first. **Breaking as of
+  2026-07-13:** `getPort`/`resolvePort` now throw on malformed or out-of-range
+  `<APP>_PORT` overrides and on an invalid `default`/`defaultPort`, instead of
+  silently accepting them.
 - **`@tejika/process`**: `runDaemon`, `spawnDaemon`, `createDaemonClient`
   (reconnect backoff 250ms–5s), `ensureDaemon`, `getDaemonStatus`, `stopDaemon`.
   Generic over the Enkaku `Protocol`; `app: string` replaces baked-in paths.
@@ -33,8 +39,21 @@ version) as the first step — it affects every package.json edit below.
   `serveStaticSPA`. Preserves the Host/Origin/timing-safe-token/`chmod 0o600`
   defenses.
 - **`@tejika/cli`**: `buildProgram`, `runInk`, `renderStatic`, `withSocketPath`,
-  `withPort`, `withLogLevel`. NOTE: a program using `withPort` MUST run via
-  `program.parseAsync()` (the lazy default uses an async preAction hook).
+  `withPort`, `withLogLevel`, `DEFAULT_LOG_LEVELS` (LogTape's level set:
+  `trace debug info warning error fatal`, immutable). NOTE: a program using
+  `withPort` MUST run via `program.parseAsync()` (the lazy default uses an async
+  preAction hook), unless `withPort` is called with `{ exact: true }`, whose hook
+  is synchronous.
+
+  **Migration warning — `optsWithGlobals()` break:** `withPort`'s and
+  `withSocketPath`'s preAction hooks now write the resolved default onto the
+  command the option is registered on (its owner), not onto the leaf action
+  command as Mokei's current code relies on. Concretely: if `--port`/
+  `--socket-path` is registered on a parent command and a subcommand's `action`
+  handler reads its `options` argument (equivalently, calls `opts()` on itself),
+  it will now see `undefined` instead of the resolved value. Every such leaf
+  action must be changed to read `optsWithGlobals()` instead. Audit Mokei's
+  `cli/src/program.ts` subcommand actions for this pattern before cutting over.
 - **`@tejika/ui`**: `StatusLine`, `Footer`, `KeyHints`, `ConfirmCard`,
   `SelectCard`, `Spinner`, `IconLine`, `SystemNotice` (generic, props-only).
 

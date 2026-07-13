@@ -96,9 +96,6 @@ importers:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.17
-      ink-testing-library:
-        specifier: 'catalog:'
-        version: 4.0.0(@types/react@19.2.17)
       strip-ansi:
         specifier: 'catalog:'
         version: 7.2.0

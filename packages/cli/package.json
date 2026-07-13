@@ -32,7 +32,6 @@
     "@tejika/test": "workspace:^",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
-    "ink-testing-library": "catalog:",
     "strip-ansi": "catalog:"
   }
 }

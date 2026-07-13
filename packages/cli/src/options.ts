@@ -44,10 +44,12 @@ export type WithPortOptions = {
  * reads an ancestor's `--port` with `optsWithGlobals()`, not `opts()`.
  *
  * Without `exact`, the hook is async (it awaits `getPort`, which probes for a free
- * port). Commander only awaits hooks under `parseAsync()`; under the synchronous
- * `parse()` the hook is fire-and-forget, so its result lands after the action has
- * already run and `port` is undefined at action time. Such a program MUST call
- * `parseAsync()`.
+ * port). Commander chains the action after the hook's promise, so the action does
+ * see the resolved `port` either way. The hazard is `parse()` itself: it is
+ * fire-and-forget and returns before the hook and action have run, so any code
+ * after `parse()` observes nothing yet, and a rejection from the hook or action
+ * surfaces as an unhandled rejection instead of propagating to the caller. Such a
+ * program MUST call `parseAsync()`.
  *
  * With `exact: true` the hook is synchronous (`resolvePort` does no I/O), so plain
  * `parse()` works.

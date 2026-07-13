@@ -21,6 +21,22 @@ function programWithSubcommand(register: (cmd: Command) => void): {
   return { program, seen: () => captured }
 }
 
+/**
+ * Build `parent [-p <port>] sub`, exposing the `program` and `sub` `Command`
+ * objects themselves so a test can assert on each command's own `opts()`
+ * rather than the ancestor-merged `optsWithGlobals()` view.
+ */
+function programAndSubCommand(register: (cmd: Command) => void): {
+  program: Command
+  sub: Command
+} {
+  const sub = new Command('sub').action(() => {})
+  const program = new Command('parent').exitOverride()
+  register(program)
+  program.addCommand(sub)
+  return { program, sub }
+}
+
 describe('withPort', () => {
   test('injects the env-resolved default when no flag is given', async () => {
     process.env.MYAPP_PORT = '7777'
@@ -76,6 +92,14 @@ describe('withPort', () => {
 
   test('exact without a default throws at registration', () => {
     expect(() => withPort(new Command(), 'myapp', { exact: true })).toThrow(/requires a `default`/)
+  })
+
+  test("writes the default to the option's own command, not the leaf action", async () => {
+    process.env.MYAPP_PORT = '7777'
+    const { program, sub } = programAndSubCommand((cmd) => withPort(cmd, 'myapp'))
+    await program.parseAsync(['sub'], { from: 'user' })
+    expect(program.opts().port).toBe(7777)
+    expect(sub.opts().port).toBeUndefined()
   })
 })
 

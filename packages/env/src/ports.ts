@@ -34,14 +34,41 @@ function assertPort(port: number, label?: string, raw: string | number = port): 
   return port
 }
 
-export async function getPort(app: string, opts: { default?: number } = {}): Promise<number> {
+export type GetPortOptions = {
+  /** Preferred port. If it is taken, a different free port is returned. */
+  default?: number
+  /** Host to probe for availability. */
+  host?: string
+}
+
+/**
+ * Resolve a port for a server to listen on. The env override wins; otherwise a
+ * free port is found, preferring `opts.default`.
+ *
+ * NOTE: when `opts.default` is already taken this returns a DIFFERENT port. Use
+ * `resolvePort` for a client that must dial a known port — probing would see the
+ * server holding it and hand back a port nothing is listening on.
+ */
+export async function getPort(app: string, opts: GetPortOptions = {}): Promise<number> {
   const override = getAppEnvVar(app, 'PORT')
   if (override != null) {
-    const port = Number.parseInt(override, 10)
-    if (Number.isNaN(port)) {
-      throw new Error(`${appEnvVar(app, 'PORT')} is not a valid port number: "${override}"`)
-    }
-    return port
+    return parsePort(override, appEnvVar(app, 'PORT'))
   }
-  return getAvailablePort(opts.default == null ? undefined : { port: opts.default })
+  if (opts.default != null) {
+    assertPort(opts.default)
+  }
+  return getAvailablePort({ port: opts.default, host: opts.host })
+}
+
+/**
+ * Resolve a known port without probing: the env override if set, otherwise
+ * `defaultPort` verbatim. Synchronous and I/O-free — this is the client-side
+ * counterpart of `getPort`.
+ */
+export function resolvePort(app: string, defaultPort: number): number {
+  const override = getAppEnvVar(app, 'PORT')
+  if (override != null) {
+    return parsePort(override, appEnvVar(app, 'PORT'))
+  }
+  return assertPort(defaultPort)
 }

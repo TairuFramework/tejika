@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { getPort, parsePort } from '../src/ports.js'
+import { getPort, parsePort, resolvePort } from '../src/ports.js'
 
 afterEach(() => {
   delete process.env.MYAPP_PORT
@@ -47,8 +47,48 @@ describe('getPort', () => {
     const port = await getPort('myapp', { default: 4000 })
     expect(port).toBeGreaterThan(0)
   })
-  test('throws on a non-numeric override', async () => {
-    process.env.MYAPP_PORT = 'abc'
-    await expect(getPort('myapp')).rejects.toThrow(/not a valid port/)
+  test.each([
+    'abc',
+    '80abc',
+    '80.5',
+    '0x50',
+    '0',
+    '-1',
+    '70000',
+  ])('throws on the invalid override %j', async (value) => {
+    process.env.MYAPP_PORT = value
+    await expect(getPort('myapp')).rejects.toThrow(/MYAPP_PORT is not a valid port number/)
+  })
+  test('throws on an invalid default', async () => {
+    await expect(getPort('myapp', { default: 0 })).rejects.toThrow(/Invalid port number/)
+  })
+})
+
+describe('resolvePort', () => {
+  test('returns the default verbatim without probing', () => {
+    expect(resolvePort('myapp', 4000)).toBe(4000)
+  })
+  test('returns the default even when the port is in use', async () => {
+    const { createServer } = await import('node:net')
+    const server = createServer()
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    const port = typeof address === 'object' && address != null ? address.port : 0
+    try {
+      expect(resolvePort('myapp', port)).toBe(port)
+    } finally {
+      await new Promise((resolve) => server.close(resolve))
+    }
+  })
+  test('returns the env override when set', () => {
+    process.env.MYAPP_PORT = '7777'
+    expect(resolvePort('myapp', 4000)).toBe(7777)
+  })
+  test('throws on an invalid env override', () => {
+    process.env.MYAPP_PORT = '0'
+    expect(() => resolvePort('myapp', 4000)).toThrow(/MYAPP_PORT is not a valid port number/)
+  })
+  test('throws on an invalid default', () => {
+    expect(() => resolvePort('myapp', 70000)).toThrow(/Invalid port number/)
   })
 })

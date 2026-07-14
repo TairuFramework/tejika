@@ -122,7 +122,9 @@ const stateOwners = new Map<string, symbol>()
  * A failed try-lock means someone else holds the mutex, and both possibilities are safe:
  * a stopper waiting for us (it binds nothing, so our own cleanup is uncontended), or a
  * booter that found our socket closed, classified us stale, and claimed the state file —
- * whose fresh record the guards below refuse to touch. Two guards, one per direction:
+ * whose fresh record the guards below refuse to touch, because the successor publishes its
+ * owner token WITH the claim, not after the bind: the record is `stateOwners`-owned by
+ * someone else from the instant it exists on disk. Two guards, one per direction:
  * the on-disk pid rejects a FOREIGN process's record, and the owner token rejects another
  * boot from THIS process. The lock only narrows the window between reading and acting.
  */
@@ -245,6 +247,11 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     }
     writeDaemonState(pidPath, claimed)
     claimedState = true
+    // With the claim, not after the bind: from the instant the record on disk is ours, no
+    // earlier boot of this process may remove it, or the socket underneath it. Publishing
+    // it later would leave the claim-to-bind window unguarded — a predecessor still inside
+    // `onShutdown` would read OUR fresh record, see no owner yet, and delete it.
+    stateOwners.set(pidPath, owner)
 
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
@@ -255,16 +262,15 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     })
 
     writeDaemonState(pidPath, { ...claimed, ready: true })
-    // Under the mutex, and only once the record on disk is ours and ready: from here on
-    // WE are the boot that owns `pidPath` in this process, and any earlier boot still
-    // running its `onShutdown` must no longer clean up after us.
-    stateOwners.set(pidPath, owner)
   } catch (err) {
     server.close(() => {})
     // Only ever our own record: a failure BEFORE `writeDaemonState` leaves whatever stale
     // record was already on disk, which is not ours to remove — the next booter reaps it
     // under this same mutex.
     if (claimedState) removeDaemonState(pidPath)
+    // Only ever our own entry: drop the claim we just published so a failed boot leaves
+    // no trace for the guards below to trip over.
+    if (stateOwners.get(pidPath) === owner) stateOwners.delete(pidPath)
     throw err
   } finally {
     lock.release()

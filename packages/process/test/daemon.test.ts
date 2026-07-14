@@ -7,10 +7,11 @@ import { setTimeout as delay } from 'node:timers/promises'
 import type { ClientMessage, ServerMessage, ServerTransportOf } from '@enkaku/protocol'
 import { serve } from '@enkaku/server'
 import { SocketTransport } from '@enkaku/socket'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { type DaemonHandle, type RunDaemonOptions, runDaemon } from '../src/daemon.js'
 import { DaemonAlreadyRunningError } from '../src/errors.js'
 import { isSocketLive } from '../src/socket.js'
+import * as stateModule from '../src/state.js'
 import { readDaemonState } from '../src/state.js'
 import type { PingProtocol } from './fixtures/protocol.js'
 
@@ -227,8 +228,9 @@ describe('DaemonHandle.close', () => {
       },
     })
     const closing = first.close()
-    // The server has stopped accepting, but the socket file and the record are still on
-    // disk and the mutex is free: exactly the state a re-boot classifies as `stale`.
+    // The server has stopped accepting, so `server.close()` has already unlinked the
+    // socket file; only the record is still on disk, and the mutex is free: exactly the
+    // state a re-boot classifies as `stale`.
     await entered
 
     const second = await boot()
@@ -240,6 +242,57 @@ describe('DaemonHandle.close', () => {
     await expect(isSocketLive(socketPath)).resolves.toBe(true)
     expect(readDaemonState(pidPath)?.pid).toBe(process.pid)
     expect(readDaemonState(pidPath)?.ready).toBe(true)
+  })
+
+  // The window the test above does not reach: there, `releaseShutdown()` fires only after
+  // `second` has *fully* booted, so the owner token is already published (even by the buggy
+  // post-bind `stateOwners.set`) before `first`'s `cleanUp` ever runs. Here, `first`'s
+  // `onShutdown` is released from INSIDE `second`'s claim write — the first `ready: false`
+  // write after the claim — so `first`'s `cleanUp` races `second`'s own claim-to-bind
+  // window. The pid guard alone cannot save `second`: both records carry `process.pid`. Only
+  // an owner token published WITH the claim (not after the bind) closes the gap.
+  test('does not let a same-process predecessor delete a claimed-but-not-yet-bound successor', async () => {
+    let onShutdownEntered = (): void => {}
+    const entered = new Promise<void>((resolve) => {
+      onShutdownEntered = resolve
+    })
+    let releaseShutdown = (): void => {}
+    const held = new Promise<void>((resolve) => {
+      releaseShutdown = resolve
+    })
+
+    const first = await boot({
+      onShutdown: async () => {
+        onShutdownEntered()
+        await held
+      },
+    })
+    const closing = first.close()
+    await entered
+
+    const originalWriteDaemonState = stateModule.writeDaemonState
+    let released = false
+    const spy = vi.spyOn(stateModule, 'writeDaemonState').mockImplementation((path, state) => {
+      originalWriteDaemonState(path, state)
+      // The claim write: the record is `second`'s from this instant, but — this is exactly
+      // the bug window — its owner token is not necessarily published yet.
+      if (!released && !state.ready) {
+        released = true
+        releaseShutdown()
+      }
+    })
+
+    try {
+      const second = await boot()
+      await closing
+
+      expect(second.pid).toBe(process.pid)
+      await expect(isSocketLive(socketPath)).resolves.toBe(true)
+      expect(readDaemonState(pidPath)?.pid).toBe(process.pid)
+      expect(readDaemonState(pidPath)?.ready).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   test('is triggered by an AbortSignal', async () => {

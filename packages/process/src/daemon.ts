@@ -95,6 +95,22 @@ async function closeServer(server: NetServer, connections: Set<Socket>): Promise
 }
 
 /**
+ * The current owner of each `pidPath` WITHIN this process, as a token unique to one
+ * successful boot.
+ *
+ * The pid guard alone cannot scope a cleanup to the boot that owns it: two daemons booted
+ * on the same `pidPath` from ONE process share `process.pid`, so a shutting-down daemon
+ * would happily read its successor's record, recognise its own pid, and delete a live
+ * daemon's socket and record. That successor is not exotic — the mutex is deliberately not
+ * held across `onShutdown` (up to `shutdownTimeoutMs`), and in that window a re-boot on the
+ * same path classifies the closing daemon as `stale` (its socket no longer accepts) and
+ * legitimately takes over. The token distinguishes "my own record" from "a sibling boot's
+ * record that happens to carry my pid"; a whole-record comparison would not, since two boots
+ * in one process can share a `startedAt` millisecond.
+ */
+const stateOwners = new Map<string, symbol>()
+
+/**
  * Remove our socket and our state record, under the boot mutex when it can be taken
  * INSTANTLY.
  *
@@ -106,23 +122,30 @@ async function closeServer(server: NetServer, connections: Set<Socket>): Promise
  * A failed try-lock means someone else holds the mutex, and both possibilities are safe:
  * a stopper waiting for us (it binds nothing, so our own cleanup is uncontended), or a
  * booter that found our socket closed, classified us stale, and claimed the state file —
- * whose fresh record the pid guard refuses to touch. The pid guard is what makes the
- * removal safe with or without the lock; the lock only narrows the window between reading
- * the record and acting on it.
+ * whose fresh record the guards below refuse to touch. Two guards, one per direction:
+ * the on-disk pid rejects a FOREIGN process's record, and the owner token rejects another
+ * boot from THIS process. The lock only narrows the window between reading and acting.
  */
-async function cleanUp(lockPath: string, pidPath: string, socketPath: string): Promise<void> {
+async function cleanUp(
+  lockPath: string,
+  pidPath: string,
+  socketPath: string,
+  owner: symbol,
+): Promise<void> {
   let lock: FileLock | null = null
   try {
     lock = await acquireFileLock(lockPath, { timeout: 0 })
   } catch {
-    // Held by someone else. Fall through: the pid guard below still applies.
+    // Held by someone else. Fall through: the guards below still apply.
   }
   try {
-    if (readDaemonState(pidPath)?.pid === process.pid) {
+    if (stateOwners.get(pidPath) === owner && readDaemonState(pidPath)?.pid === process.pid) {
       safeRemove(socketPath)
       removeDaemonState(pidPath)
     }
   } finally {
+    // Only ever our own entry: a successor's claim must survive our shutdown.
+    if (stateOwners.get(pidPath) === owner) stateOwners.delete(pidPath)
     lock?.release()
   }
 }
@@ -186,8 +209,12 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
   // several `runDaemon` calls racing the SAME pidPath from inside one process (exactly
   // what the concurrent-boot tests do) all share `process.pid`, so a loser that never
   // wrote anything would misidentify the winner's live record as its own and delete it.
-  // Holding the mutex for the whole critical section is what makes the flag sufficient —
-  // nothing else can write to `pidPath` between our own write and our own catch.
+  // The flag is sound without claiming exclusivity the mutex does not provide: a closing
+  // daemon's `cleanUp` can still REMOVE a record without the mutex (its try-lock may fail
+  // — that is the design), but a removal can only turn our own record into no record. It
+  // can never put a foreign record under our flag, so the flag never authorises deleting
+  // one; at worst `removeDaemonState` unlinks a path that is already gone.
+  const owner = Symbol('daemon-owner')
   let claimedState = false
   try {
     const status = await classifyState(readDaemonState(pidPath))
@@ -228,6 +255,10 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     })
 
     writeDaemonState(pidPath, { ...claimed, ready: true })
+    // Under the mutex, and only once the record on disk is ours and ready: from here on
+    // WE are the boot that owns `pidPath` in this process, and any earlier boot still
+    // running its `onShutdown` must no longer clean up after us.
+    stateOwners.set(pidPath, owner)
   } catch (err) {
     server.close(() => {})
     // Only ever our own record: a failure BEFORE `writeDaemonState` leaves whatever stale
@@ -276,7 +307,7 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
       } finally {
         // Always: a rejected or timed-out onShutdown must not leak the socket file or the
         // state record.
-        await cleanUp(lockPath, pidPath, socketPath)
+        await cleanUp(lockPath, pidPath, socketPath, owner)
       }
     })()
     return await closing

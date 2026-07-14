@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { LockRecord } from '@tejika/process'
+import type { DaemonState } from '@tejika/process'
 import { describe, expect, test } from 'vitest'
 import { waitForDaemonRunning, waitForDaemonStopped } from '../src/daemon.js'
 
@@ -23,7 +23,7 @@ describe('waitForDaemonRunning', () => {
     const server = createServer()
     await new Promise<void>((resolve) => server.listen(socketPath, resolve))
     try {
-      const record: LockRecord = {
+      const record: DaemonState = {
         pid: process.pid,
         socketPath,
         startedAt: Date.now(),
@@ -36,13 +36,14 @@ describe('waitForDaemonRunning', () => {
     }
   })
 
-  test('does not resolve while the lockfile only reports booting', async () => {
+  test('does not resolve while the record only reports booting', async () => {
     const dir = makeDir()
     const pidPath = join(dir, 'app.pid')
-    // Claimed but not yet bound: `ready: false` with a fresh `startedAt`. A daemon
-    // claims its lockfile before binding its socket, so `waitForDaemonRunning`
-    // deliberately does not accept `booting` as proof of readiness.
-    const record: LockRecord = {
+    // Claimed but not yet bound: `ready: false` with a fresh `startedAt`. The pidfile is
+    // a presence record, not a lock — exclusion is a separate mutex — and a daemon writes
+    // it BEFORE binding its socket. So a record on disk is not proof of readiness, and
+    // `waitForDaemonRunning` deliberately does not accept `booting` as such.
+    const record: DaemonState = {
       pid: process.pid,
       socketPath: join(dir, 'app.sock'),
       startedAt: Date.now(),
@@ -69,7 +70,7 @@ describe('waitForDaemonStopped', () => {
     await once(child, 'exit')
     const pid = child.pid
     if (pid == null) throw new Error('expected spawned child to have a pid')
-    const record: LockRecord = {
+    const record: DaemonState = {
       pid,
       socketPath: join(tmpdir(), 'does-not-exist.sock'),
       startedAt: Date.now(),
@@ -82,7 +83,7 @@ describe('waitForDaemonStopped', () => {
   test('returns (not throws) on timeout while the process is still booting', async () => {
     const dir = makeDir()
     const pidPath = join(dir, 'app.pid')
-    const record: LockRecord = {
+    const record: DaemonState = {
       pid: process.pid,
       socketPath: join(dir, 'app.sock'),
       startedAt: Date.now(),

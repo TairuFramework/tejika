@@ -119,6 +119,20 @@ describe('runDaemon', () => {
       await new Promise<void>((resolve) => foreign.close(() => resolve()))
     }
   })
+
+  // The failure paths that never reach `writeDaemonState` prove nothing about the record
+  // removal: there was no record to begin with, so their `toBeNull()` passes trivially. This
+  // one fails AFTER the record is on disk — the record is written before the bind, and the
+  // bind is what fails — so it is the only test that can catch a boot that leaves a
+  // `ready: false` corpse behind for the next booter to trip over.
+  test('removes the record it wrote when the bind itself fails', async () => {
+    // A `sun_path` longer than the AF_UNIX limit (~104 bytes on darwin): `listen` fails
+    // with EINVAL, deterministically, with no dependence on timing or permissions.
+    const tooLongSocketPath = join(dir, `${'s'.repeat(120)}.sock`)
+    expect(Buffer.byteLength(tooLongSocketPath)).toBeGreaterThan(104)
+    await expect(boot({ socketPath: tooLongSocketPath })).rejects.toThrow()
+    expect(readDaemonState(pidPath)).toBeNull()
+  })
 })
 
 describe('signal handling', () => {
@@ -188,6 +202,44 @@ describe('DaemonHandle.close', () => {
     })
     await expect(handle.close()).rejects.toThrow(/timed out/i)
     expect(readDaemonState(pidPath)).toBeNull()
+  })
+
+  // The pid guard cannot scope a cleanup on its own: a replacement booted in the SAME
+  // process carries the same pid, so a naive `record.pid === process.pid` check lets a
+  // daemon that is still inside `onShutdown` delete its successor's socket and record —
+  // leaving a live daemon invisible to every client and to `getDaemonStatus`, and
+  // unstoppable. The window is real: the boot mutex is deliberately not held across
+  // `onShutdown`, and `close()` is fired un-awaited by `onAbort`.
+  test('does not clean up after a same-process daemon that replaced it mid-shutdown', async () => {
+    let onShutdownEntered = (): void => {}
+    const entered = new Promise<void>((resolve) => {
+      onShutdownEntered = resolve
+    })
+    let releaseShutdown = (): void => {}
+    const held = new Promise<void>((resolve) => {
+      releaseShutdown = resolve
+    })
+
+    const first = await boot({
+      onShutdown: async () => {
+        onShutdownEntered()
+        await held
+      },
+    })
+    const closing = first.close()
+    // The server has stopped accepting, but the socket file and the record are still on
+    // disk and the mutex is free: exactly the state a re-boot classifies as `stale`.
+    await entered
+
+    const second = await boot()
+    expect(second.pid).toBe(process.pid)
+    releaseShutdown()
+    await closing
+
+    // The replacement must still be serving, and still be findable.
+    await expect(isSocketLive(socketPath)).resolves.toBe(true)
+    expect(readDaemonState(pidPath)?.pid).toBe(process.pid)
+    expect(readDaemonState(pidPath)?.ready).toBe(true)
   })
 
   test('is triggered by an AbortSignal', async () => {

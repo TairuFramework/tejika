@@ -20,7 +20,12 @@ afterEach(() => {
 // a waiting acquire there deadlocks against a `stopDaemon` that is holding the mutex
 // while waiting for this process to exit. This pins the semantics that makes it safe:
 // a try-lock under contention FAILS FAST, and it fails with a distinguishable error.
-test('a try-lock throws TimeoutInterruption rather than waiting', async () => {
+//
+// Both acquires below run in THIS process, so `acquireFileLock`'s in-memory per-process
+// queue (`enterQueue`) already rejects the second one before `claimLockFile` — the
+// filesystem `link()`/EEXIST path — is ever reached. That pins a real behaviour, but it
+// is not the one `close()` depends on: see the cross-process test below for that.
+test('a try-lock rejects a same-process holder without waiting', async () => {
   const held = await acquireFileLock(lockPath, { timeout: 0 })
   try {
     const started = Date.now()
@@ -31,6 +36,37 @@ test('a try-lock throws TimeoutInterruption rather than waiting', async () => {
   } finally {
     held.release()
   }
+})
+
+// `close()`'s try-lock actually contends against a DIFFERENT OS process: `stopDaemon`,
+// running in the CLI, holds the mutex while it waits for this daemon to exit. That
+// contention never touches the in-memory queue above — it is decided entirely on disk,
+// by `claimLockFile`'s `link()` hitting EEXIST against a live, non-stale holder, which
+// falls out the bottom of `acquireFileLock`'s loop and throws from the try-lock branch.
+// No lock is held in-process here, so `enterQueue`'s slot is free and this must reach
+// that branch — pinning the fail-fast path `close()` actually depends on.
+test('a try-lock rejects a live cross-process holder without waiting', async () => {
+  // `process.pid` is guaranteed alive for the life of this test. `hostname` and `bootAt`
+  // match this machine so `checkLiveness` treats the record as same-boot/same-namespace
+  // and reaches the pid probe, which reports 'alive' — never stale, however long held.
+  writeFileSync(
+    lockPath,
+    JSON.stringify({
+      pid: process.pid,
+      hostname: hostname(),
+      nonce: 'live-holder',
+      bootID: null,
+      bootAt: Date.now() - uptime() * 1000,
+      startedAt: Date.now(),
+      uptimeAt: uptime() * 1000,
+    }),
+    'utf8',
+  )
+  const started = Date.now()
+  await expect(acquireFileLock(lockPath, { timeout: 0 })).rejects.toBeInstanceOf(
+    TimeoutInterruption,
+  )
+  expect(Date.now() - started).toBeLessThan(500)
 })
 
 test('a released lock is immediately re-acquirable', async () => {

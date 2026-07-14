@@ -116,7 +116,22 @@ async function stopLocked(pidPath: string, opts: StopDaemonOptions): Promise<Sto
 
     if (status.state === 'not-running') return { stopped: false, reason: 'not-running' }
     pid = status.pid
-    if (status.state === 'stale') {
+    // `booting` is reaped exactly like `stale`, and its pid is NEVER signalled. The proof:
+    // a `ready: false` record is only ever written from inside this same mutex, so a
+    // `ready: false` record read while HOLDING the mutex was written by a process that does
+    // not hold it — its writer is gone, and the record is abandoned by construction. The pid
+    // on it is therefore not our daemon: either it is dead (and `classifyState` already said
+    // `stale`), or it is a RECYCLED pid naming an arbitrary live process — a stranger. The
+    // state file outlives a reboot (`getStateDir`, i.e. `~/.config/<app>`), so a daemon
+    // SIGKILLed between its claim and its `ready: true` write leaves exactly such a record
+    // behind for a post-reboot `stop` to find. Signalling it would SIGTERM, wait
+    // `killTimeoutMs`, and then SIGKILL an innocent process. `runDaemon` draws this same
+    // conclusion and reclaims a `booting` record on the spot; the two paths must agree.
+    // Note the asymmetry that makes this the ONE dangerous classification: a recycled pid on
+    // a `ready: true` record is caught, because `classifyState` probes its socket and demotes
+    // it to `stale`. `booting` has no such corroboration — nothing to probe — so the only
+    // safe act is to remove the record, which the mutex licenses unconditionally.
+    if (status.state === 'stale' || status.state === 'booting') {
       removeDaemonState(pidPath)
       return { stopped: false, pid, reason: 'not-running' }
     }

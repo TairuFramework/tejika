@@ -133,6 +133,8 @@ so `getDaemonStatus` never blocks behind a live daemon.
 | — | `runDaemon({ lockPath, lockTimeoutMs })` and `stopDaemon({ lockPath, lockTimeoutMs })`. `lockPath` defaults to `` `${pidPath}.lock` ``, so nothing needs configuring, and no new CLI flag is passed to the child |
 | — | `StopResult.reason: 'busy'` — the mutex is held by a concurrent boot or stop, so nothing was attempted |
 | — | `TimeoutInterruption` (re-exported from `@sozai/lock`) can escape `runDaemon` when the boot mutex cannot be taken within `lockTimeoutMs`. Distinct from `DaemonAlreadyRunningError`: "someone is booting or stopping and will not let go" is not "someone is already serving" |
+| `DaemonAlreadyRunningError.pid: number`, `-1` when the daemon holds the socket with no state record naming it | `pid?: number` — `undefined` there instead. `-1` is not a pid: `process.kill(-1, sig)` signals every process you may signal, so an error object carrying it hands `process.kill(err.pid, …)` a weapon |
+| — | `getLockPathFor(pidPath)` is exported. Anything that passes an explicit `pidPath` (`spawnDaemon` does, by default) can now name the mutex guarding it; `@tejika/env`'s `getLockPath(app)` only derives it from an app name |
 
 Why: the old pidfile was a mutex and a presence record at once, so every boot and
 every stop was a check-then-act guarded by the lockfile's inode. That guard does
@@ -145,3 +147,12 @@ a pid is only trusted when it comes from this boot.
 not yet bound) and must not be treated as `'running'`. A daemon booted by 0.2.0 is
 still readable by 0.3.0 — the record format did not change — but it holds no boot
 mutex, so stop it before upgrading rather than relying on the overlap.
+
+`stopDaemon` never signals a `'booting'` record's pid: it removes the record and
+reports `reason: 'not-running'`. A `ready: false` record is only ever written from
+inside the mutex, so one *read* from inside the mutex was written by a process that
+no longer holds it — it is abandoned by construction, and its pid is either dead or
+recycled onto an unrelated process. (The record outlives a reboot, so this is
+ordinary: SIGKILL a daemon mid-boot, reboot, run `stop`.) `runDaemon` reclaims such a
+record on exactly the same proof. A recycled pid on a `ready: true` record is caught
+instead by the socket probe, which demotes it to `'stale'`.

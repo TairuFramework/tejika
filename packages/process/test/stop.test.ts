@@ -136,21 +136,27 @@ describe('stopDaemon', () => {
     }
   })
 
-  // The happy path: a live daemon is SIGTERMed, exits on its own, and its state file is
-  // removed. `ready: false` classifies as `booting` on a live pid (there is no socket
-  // here for a `ready: true` record to probe, which would otherwise read as `stale`), and
-  // `stopDaemon` signals `booting` exactly like `running`.
+  // The happy path, with a child that is actually a daemon: it BINDS the socket its record
+  // names, so the record is `ready: true` and `classifyState`'s socket probe corroborates
+  // it as `running` — the one classification `stopDaemon` may signal. (An earlier version of
+  // this test used a socket-less `setInterval` child under a `ready: false` record precisely
+  // to dodge that probe, which is what let the `booting` fall-through below go unnoticed.)
   test('a live daemon is signalled, exits, and has its state file removed', async () => {
-    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
-      stdio: 'ignore',
-    })
+    const child = spawn(
+      process.execPath,
+      [
+        '-e',
+        `require('net').createServer().listen(${JSON.stringify(socketPath)}, () => console.log('listening'))`,
+      ],
+      { stdio: ['ignore', 'pipe', 'ignore'] },
+    )
     try {
-      await new Promise<void>((resolve) => child.once('spawn', () => resolve()))
+      await new Promise<void>((resolve) => child.stdout?.once('data', () => resolve()))
       writeDaemonState(pidPath, {
         pid: child.pid as number,
         socketPath,
         startedAt: Date.now(),
-        ready: false,
+        ready: true,
       })
 
       await expect(stopDaemon({ app: APP, pidPath })).resolves.toEqual({
@@ -163,13 +169,48 @@ describe('stopDaemon', () => {
     }
   })
 
+  // The regression. `stopLocked` HOLDS the mutex, and a `ready: false` record is only ever
+  // written from inside that mutex — so one seen from in there was written by a process that
+  // does not hold it, and is abandoned by construction. Its live pid is therefore NOT a
+  // daemon: it is a recycled pid naming a stranger (the state file outlives a reboot, so a
+  // daemon killed between its claim and its `ready: true` write leaves exactly this record
+  // for the next `stop` to find). `stopDaemon` used to SIGTERM it, wait out `killTimeoutMs`,
+  // and SIGKILL it. It must reap the record and signal nothing.
+  test('a booting record is reaped, and its recycled pid is never signalled', async () => {
+    // A live process that is not a daemon: exactly what a recycled pid looks like.
+    const stranger = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+    })
+    try {
+      await new Promise<void>((resolve) => stranger.once('spawn', () => resolve()))
+      const pid = stranger.pid as number
+      writeDaemonState(pidPath, { pid, socketPath, startedAt: Date.now(), ready: false })
+
+      await expect(stopDaemon({ app: APP, pidPath })).resolves.toEqual({
+        stopped: false,
+        pid,
+        reason: 'not-running',
+      })
+      expect(existsSync(pidPath)).toBe(false)
+      // The point of the test: no SIGTERM went out, so the stranger is untouched.
+      await delay(200)
+      expect(() => process.kill(pid, 0)).not.toThrow()
+    } finally {
+      stranger.kill('SIGKILL')
+    }
+  })
+
   test('a caller abort resolves with reason: aborted rather than throwing or reporting a timeout', async () => {
-    // A child that ignores SIGTERM, so the exit poll is still running when the caller
-    // aborts. It announces itself on stdout only once the handler is installed — the
-    // `spawn` event fires before the child has run a line of script.
+    // A real daemon — it binds the socket its record names, so it classifies as `running`
+    // and is signalled — that IGNORES SIGTERM, so the exit poll is still running when the
+    // caller aborts. It announces itself on stdout only once it is listening and the handler
+    // is installed: the `spawn` event fires before the child has run a line of script.
     const child = spawn(
       process.execPath,
-      ['-e', 'process.on("SIGTERM", () => {}); setInterval(() => {}, 1000); console.log("ready")'],
+      [
+        '-e',
+        `process.on("SIGTERM", () => {}); require('net').createServer().listen(${JSON.stringify(socketPath)}, () => console.log('listening'))`,
+      ],
       { stdio: ['ignore', 'pipe', 'ignore'] },
     )
     try {
@@ -178,7 +219,7 @@ describe('stopDaemon', () => {
         pid: child.pid as number,
         socketPath,
         startedAt: Date.now(),
-        ready: false,
+        ready: true,
       })
 
       const controller = new AbortController()

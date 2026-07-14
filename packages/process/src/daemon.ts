@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync } from 'node:fs'
 import { createServer, type Server as NetServer, type Socket } from 'node:net'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import type {
   ClientMessage,
   ProtocolDefinition,
@@ -107,6 +107,12 @@ async function closeServer(server: NetServer, connections: Set<Socket>): Promise
  * legitimately takes over. The token distinguishes "my own record" from "a sibling boot's
  * record that happens to carry my pid"; a whole-record comparison would not, since two boots
  * in one process can share a `startedAt` millisecond.
+ *
+ * KEYED ON THE RESOLVED PATH, exactly as `@sozai/lock` keys its own in-process queue, and
+ * for the same reason: `./app.pid` and `/abs/app.pid` are ONE file but two strings. Keyed
+ * on the raw string, two boots of the same file from one process land in different entries,
+ * so a predecessor's `cleanUp` guard passes against a live successor's record — and the pid
+ * guard cannot save it, because both boots share `process.pid`.
  */
 const stateOwners = new Map<string, symbol>()
 
@@ -131,6 +137,7 @@ const stateOwners = new Map<string, symbol>()
 async function cleanUp(
   lockPath: string,
   pidPath: string,
+  ownerKey: string,
   socketPath: string,
   owner: symbol,
 ): Promise<void> {
@@ -141,13 +148,13 @@ async function cleanUp(
     // Held by someone else. Fall through: the guards below still apply.
   }
   try {
-    if (stateOwners.get(pidPath) === owner && readDaemonState(pidPath)?.pid === process.pid) {
+    if (stateOwners.get(ownerKey) === owner && readDaemonState(pidPath)?.pid === process.pid) {
       safeRemove(socketPath)
       removeDaemonState(pidPath)
     }
   } finally {
     // Only ever our own entry: a successor's claim must survive our shutdown.
-    if (stateOwners.get(pidPath) === owner) stateOwners.delete(pidPath)
+    if (stateOwners.get(ownerKey) === owner) stateOwners.delete(ownerKey)
     lock?.release()
   }
 }
@@ -162,6 +169,8 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
 ): Promise<DaemonHandle> {
   const socketPath = opts.socketPath ?? getSocketPath(opts.app)
   const pidPath = opts.pidPath ?? getPIDPath(opts.app)
+  // The `stateOwners` key: one identity per FILE, not per spelling of its path.
+  const ownerKey = resolve(pidPath)
   const lockPath = opts.lockPath ?? getLockPathFor(pidPath)
   const shutdownTimeoutMs = opts.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS
   const handleSignals = opts.handleSignals !== false
@@ -233,8 +242,10 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     if (existsSync(socketPath)) {
       if (await isSocketLive(socketPath)) {
         // A foreign daemon holds the socket without a state file. We hold the mutex, but
-        // its socket is not ours to steal.
-        throw new DaemonAlreadyRunningError(-1, socketPath)
+        // its socket is not ours to steal. Its pid is genuinely unknown — nothing names it —
+        // so the error carries no pid rather than the `-1` it used to, which any consumer
+        // passing `err.pid` to `process.kill` would have fired at every process it may signal.
+        throw new DaemonAlreadyRunningError(undefined, socketPath)
       }
       safeRemove(socketPath)
     }
@@ -251,7 +262,7 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     // earlier boot of this process may remove it, or the socket underneath it. Publishing
     // it later would leave the claim-to-bind window unguarded — a predecessor still inside
     // `onShutdown` would read OUR fresh record, see no owner yet, and delete it.
-    stateOwners.set(pidPath, owner)
+    stateOwners.set(ownerKey, owner)
 
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
@@ -270,7 +281,7 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     if (claimedState) removeDaemonState(pidPath)
     // Only ever our own entry: drop the claim we just published so a failed boot leaves
     // no trace for the guards below to trip over.
-    if (stateOwners.get(pidPath) === owner) stateOwners.delete(pidPath)
+    if (stateOwners.get(ownerKey) === owner) stateOwners.delete(ownerKey)
     throw err
   } finally {
     lock.release()
@@ -313,7 +324,7 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
       } finally {
         // Always: a rejected or timed-out onShutdown must not leak the socket file or the
         // state record.
-        await cleanUp(lockPath, pidPath, socketPath, owner)
+        await cleanUp(lockPath, pidPath, ownerKey, socketPath, owner)
       }
     })()
     return await closing

@@ -76,3 +76,14 @@ export function writeDaemonState(path: string, state: DaemonState): void {
 export function removeDaemonState(path: string): void {
   rmSync(path, { force: true })
 }
+
+/**
+ * The boot/stop mutex path for a given pidfile. The `.lock` suffix has exactly one
+ * definition in this package — here — and it must agree with `@tejika/env`'s
+ * `getLockPath(app)`, which derives the same suffix from an app name rather than an
+ * already-resolved `pidPath`. `@tejika/process` cannot use `getLockPath` directly
+ * because it always works from a `pidPath` callers and tests may override.
+ */
+export function getLockPathFor(pidPath: string): string {
+  return `${pidPath}.lock`
+}

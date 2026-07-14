@@ -2,9 +2,11 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
+import { getLockPath, getPIDPath } from '@tejika/env'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import {
   type DaemonState,
+  getLockPathFor,
   readDaemonState,
   removeDaemonState,
   writeDaemonState,
@@ -146,5 +148,14 @@ describe('removeDaemonState', () => {
 
   test('tolerates an already-removed record', () => {
     expect(() => removeDaemonState(pidPath)).not.toThrow()
+  })
+})
+
+describe('getLockPathFor', () => {
+  // The `.lock` suffix has exactly one definition in this package. Pin its agreement with
+  // `@tejika/env`'s `getLockPath(app)` so the two cannot silently drift — a mismatched
+  // `lockPath`/`pidPath` pair means no mutual exclusion at all.
+  test("agrees with @tejika/env's getLockPath", () => {
+    expect(getLockPathFor(getPIDPath('myapp'))).toBe(getLockPath('myapp'))
   })
 })

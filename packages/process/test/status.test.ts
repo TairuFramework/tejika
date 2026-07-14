@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { acquireFileLock } from '@sozai/lock'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import type { SocketProbe } from '../src/socket.js'
 import { type DaemonState, writeDaemonState } from '../src/state.js'
@@ -137,5 +138,24 @@ describe('getDaemonStatus', () => {
       state: 'stale',
       pid: 2 ** 22,
     })
+  })
+
+  // Load-bearing for `stopDaemon`/`runDaemon`: `getDaemonStatus` must never block behind a
+  // boot. An implementation that wrapped it in `withFileLock` would pass every other test
+  // here while deadlocking against a held mutex, so pin it directly: hold the lock, then
+  // assert the call still resolves promptly.
+  test('never blocks behind a held boot/stop mutex', async () => {
+    const held = await acquireFileLock(`${pidPath}.lock`, { timeout: 0 })
+    try {
+      writeDaemonState(pidPath, state({ pid: 2 ** 22, startedAt: Date.now() }))
+      const started = Date.now()
+      await expect(getDaemonStatus({ app: 'tejika-test', pidPath })).resolves.toEqual({
+        state: 'stale',
+        pid: 2 ** 22,
+      })
+      expect(Date.now() - started).toBeLessThan(500)
+    } finally {
+      held.release()
+    }
   })
 })

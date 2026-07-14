@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { TimeoutInterruption, withFileLock } from '@sozai/lock'
 import { getPIDPath } from '@tejika/env'
 import { createDeadline, type Deadline } from './deadline.js'
-import { readDaemonState, removeDaemonState } from './state.js'
+import { getLockPathFor, readDaemonState, removeDaemonState } from './state.js'
 import { classifyState } from './status.js'
 
 export type StopResult = {
@@ -107,20 +107,24 @@ export function signalTolerantly(
  * Never throws: `stopDaemon`'s contract is that it always resolves.
  */
 async function stopLocked(pidPath: string, opts: StopDaemonOptions): Promise<StopResult> {
-  const status = await classifyState(readDaemonState(pidPath))
-
-  if (status.state === 'not-running') return { stopped: false, reason: 'not-running' }
-  if (status.state === 'stale') {
-    removeDaemonState(pidPath)
-    return { stopped: false, pid: status.pid, reason: 'not-running' }
-  }
-  if (status.state === 'running-not-owned') {
-    return { stopped: false, pid: status.pid, reason: 'not-owned' }
-  }
-
-  const pid = status.pid
-  const killTimeoutMs = opts.killTimeoutMs ?? DEFAULT_KILL_TIMEOUT_MS
+  // `pid` is set as soon as a classification names one, BEFORE anything that could throw
+  // (including the `stale` branch's `removeDaemonState`) — so the catch below can report
+  // it on every failing path, not only the ones after the SIGTERM.
+  let pid: number | undefined
   try {
+    const status = await classifyState(readDaemonState(pidPath))
+
+    if (status.state === 'not-running') return { stopped: false, reason: 'not-running' }
+    pid = status.pid
+    if (status.state === 'stale') {
+      removeDaemonState(pidPath)
+      return { stopped: false, pid, reason: 'not-running' }
+    }
+    if (status.state === 'running-not-owned') {
+      return { stopped: false, pid, reason: 'not-owned' }
+    }
+
+    const killTimeoutMs = opts.killTimeoutMs ?? DEFAULT_KILL_TIMEOUT_MS
     const early = signalTolerantly(pid, 'SIGTERM')
     if (early != null) {
       if (early.stopped) removeDaemonState(pidPath)
@@ -169,7 +173,7 @@ async function stopLocked(pidPath: string, opts: StopDaemonOptions): Promise<Sto
  */
 export async function stopDaemon(opts: StopDaemonOptions): Promise<StopResult> {
   const pidPath = opts.pidPath ?? getPIDPath(opts.app)
-  const lockPath = opts.lockPath ?? `${pidPath}.lock`
+  const lockPath = opts.lockPath ?? getLockPathFor(pidPath)
 
   // Refuse up-front, exactly like `runDaemon`. The signal used to be consulted
   // only inside the exit poll — i.e. after the SIGTERM had already gone out — so
@@ -183,7 +187,10 @@ export async function stopDaemon(opts: StopDaemonOptions): Promise<StopResult> {
       signal: opts.signal,
     })
   } catch (err) {
-    // `stopLocked` never throws, so anything here came from the ACQUIRE.
+    // This is a net for the ACQUIRE (the common case — `stopLocked`'s own try/catch
+    // resolves every outcome it knows about) AND for anything the critical section
+    // failed to handle, so treat an error landing here as "acquire or unhandled",
+    // not as proof it came from the acquire.
     if (err instanceof TimeoutInterruption) {
       // Someone is booting or stopping this daemon and will not let go. Not a failure of
       // the stop, and not a timeout waiting for the daemon to die: a distinct outcome.

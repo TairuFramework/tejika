@@ -136,6 +136,33 @@ describe('stopDaemon', () => {
     }
   })
 
+  // The happy path: a live daemon is SIGTERMed, exits on its own, and its state file is
+  // removed. `ready: false` classifies as `booting` on a live pid (there is no socket
+  // here for a `ready: true` record to probe, which would otherwise read as `stale`), and
+  // `stopDaemon` signals `booting` exactly like `running`.
+  test('a live daemon is signalled, exits, and has its state file removed', async () => {
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore',
+    })
+    try {
+      await new Promise<void>((resolve) => child.once('spawn', () => resolve()))
+      writeDaemonState(pidPath, {
+        pid: child.pid as number,
+        socketPath,
+        startedAt: Date.now(),
+        ready: false,
+      })
+
+      await expect(stopDaemon({ app: APP, pidPath })).resolves.toEqual({
+        stopped: true,
+        pid: child.pid,
+      })
+      expect(existsSync(pidPath)).toBe(false)
+    } finally {
+      child.kill('SIGKILL')
+    }
+  })
+
   test('a caller abort resolves with reason: aborted rather than throwing or reporting a timeout', async () => {
     // A child that ignores SIGTERM, so the exit poll is still running when the caller
     // aborts. It announces itself on stdout only once the handler is installed — the

@@ -18,10 +18,5 @@ export {
   waitForSocket,
 } from './socket.js'
 export { type SpawnDaemonOptions, spawnDaemon } from './spawn.js'
-export {
-  type DaemonStatus,
-  getDaemonStatus,
-  type StopDaemonOptions,
-  type StopResult,
-  stopDaemon,
-} from './status.js'
+export { type DaemonStatus, getDaemonStatus } from './status.js'
+export { type StopDaemonOptions, type StopResult, stopDaemon } from './stop.js'

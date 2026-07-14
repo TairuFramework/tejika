@@ -4,9 +4,9 @@ import { getDataDir, getPIDPath, getSocketPath } from '@tejika/env'
 import spawn from 'nano-spawn'
 import { createDeadline, type Deadline } from './deadline.js'
 import { DaemonBootError } from './errors.js'
-import { readLockRecord } from './lock.js'
 import { waitForSocket } from './socket.js'
-import { classifyRecord, DEFAULT_BOOT_GRACE_MS } from './status.js'
+import { readDaemonState } from './state.js'
+import { classifyState } from './status.js'
 
 export type SpawnDaemonOptions = {
   app: string
@@ -30,28 +30,25 @@ function pending(): Promise<never> {
 }
 
 /**
- * Did SOMEONE ELSE take the lock? Our child exiting is only a boot failure if it
+ * Did SOMEONE ELSE claim the state file? Our child exiting is only a boot failure if it
  * is the whole story. Two CLIs cold-starting the same daemon is this design's
- * flagship scenario: one child wins the `O_EXCL` claim and binds, the other loses
- * it, throws `DaemonAlreadyRunningError` and exits nonzero — and that exit
- * reliably beats the socket wait's first 50ms poll. Turning it into a
- * `DaemonBootError` would fail the losing CLI even though the daemon it asked for
- * is coming up healthy under the winner. So when the lock names a LIVE daemon
- * that is not our child, the exit is a loser conceding, not a crash: say nothing
- * and let the socket wait run out its budget against the winner's socket.
+ * flagship scenario: one child wins the boot mutex and binds, the other loses it,
+ * throws `DaemonAlreadyRunningError` and exits nonzero — and that exit reliably beats
+ * the socket wait's first 50ms poll. Turning it into a `DaemonBootError` would fail the
+ * losing CLI even though the daemon it asked for is coming up healthy under the winner.
+ * So when the state file names a LIVE daemon that is not our child, the exit is a loser
+ * conceding, not a crash: say nothing and let the socket wait run out its budget against
+ * the winner's socket.
  */
-async function anotherDaemonHoldsLock(
+async function anotherDaemonHoldsState(
   pidPath: string,
   childPID: number | undefined,
 ): Promise<boolean> {
-  const record = readLockRecord(pidPath)
-  if (record == null || record.pid === childPID) return false
-  const status = await classifyRecord(record, {
-    bootGraceMs: DEFAULT_BOOT_GRACE_MS,
-    now: Date.now(),
-  })
-  // `booting` is not `running` — but it IS a live process holding the lock, and
-  // its socket is exactly what the wait below is waiting for.
+  const state = readDaemonState(pidPath)
+  if (state == null || state.pid === childPID) return false
+  const status = await classifyState(state)
+  // `booting` is not `running` — but it IS a live process that has claimed the state
+  // file, and its socket is exactly what the wait below is waiting for.
   return status.state === 'booting' || status.state === 'running'
 }
 
@@ -92,7 +89,7 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
       (child) => child.pid,
       () => undefined,
     )
-    if (await anotherDaemonHoldsLock(pidPath, childPID)) return await pending()
+    if (await anotherDaemonHoldsState(pidPath, childPID)) return await pending()
     throw new DaemonBootError(message, { logPath, cause })
   }
 

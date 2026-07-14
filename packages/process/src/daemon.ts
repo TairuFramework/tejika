@@ -13,7 +13,7 @@ import { getPIDPath, getSocketPath } from '@tejika/env'
 import { DaemonAlreadyRunningError } from './errors.js'
 import { claimDaemonLock, type DaemonLock, readLockRecord, reapLockFile } from './lock.js'
 import { isSocketLive, safeRemove } from './socket.js'
-import { classifyRecord, DEFAULT_BOOT_GRACE_MS } from './status.js'
+import { classifyState } from './status.js'
 
 const CLAIM_ATTEMPTS = 3
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000
@@ -40,7 +40,6 @@ export type RunDaemonOptions<Protocol extends ProtocolDefinition> = {
   signal?: AbortSignal
   /** Post-boot server errors and per-connection `serve` failures. */
   onError?: (err: unknown) => void
-  bootGraceMs?: number
 }
 
 export type DaemonHandle = {
@@ -56,11 +55,7 @@ export type DaemonHandle = {
  * that is what closes the split-brain race: a process that did not win the
  * O_EXCL claim has no licence to touch the socket file.
  */
-async function claimOrThrow(
-  pidPath: string,
-  socketPath: string,
-  bootGraceMs: number,
-): Promise<DaemonLock> {
+async function claimOrThrow(pidPath: string, socketPath: string): Promise<DaemonLock> {
   for (let attempt = 0; attempt < CLAIM_ATTEMPTS; attempt++) {
     const result = claimDaemonLock(pidPath, {
       pid: process.pid,
@@ -70,7 +65,7 @@ async function claimOrThrow(
     })
     if ('lock' in result) return result.lock
 
-    const status = await classifyRecord(result.conflict, { bootGraceMs, now: Date.now() })
+    const status = await classifyState(result.conflict)
     if (status.state !== 'stale' && status.state !== 'not-running') {
       throw new DaemonAlreadyRunningError(status.pid, socketPath)
     }
@@ -140,7 +135,7 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
   mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 })
   mkdirSync(dirname(pidPath), { recursive: true, mode: 0o700 })
 
-  const lock = await claimOrThrow(pidPath, socketPath, opts.bootGraceMs ?? DEFAULT_BOOT_GRACE_MS)
+  const lock = await claimOrThrow(pidPath, socketPath)
 
   const connections = new Set<Socket>()
   const server = createServer((socket) => {

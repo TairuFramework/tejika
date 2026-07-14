@@ -9,7 +9,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { createDaemonClient } from '../src/client.js'
 import { connectWithRetry, ensureDaemon } from '../src/controller.js'
 import { createDeadline } from '../src/deadline.js'
-import { stopDaemon } from '../src/status.js'
+import { stopDaemon } from '../src/stop.js'
 import type { PingProtocol } from './fixtures/protocol.js'
 
 // A pass-through spy: every test in this file still runs the real client. Only

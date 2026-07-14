@@ -9,19 +9,33 @@ import type {
 } from '@enkaku/protocol'
 import type { Server } from '@enkaku/server'
 import { SocketTransport } from '@enkaku/socket'
+import { acquireFileLock, type FileLock } from '@sozai/lock'
 import { getPIDPath, getSocketPath } from '@tejika/env'
 import { DaemonAlreadyRunningError } from './errors.js'
-import { claimDaemonLock, type DaemonLock, readLockRecord, reapLockFile } from './lock.js'
 import { isSocketLive, safeRemove } from './socket.js'
+import {
+  type DaemonState,
+  getLockPathFor,
+  readDaemonState,
+  removeDaemonState,
+  writeDaemonState,
+} from './state.js'
 import { classifyState } from './status.js'
 
-const CLAIM_ATTEMPTS = 3
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000
+const DEFAULT_LOCK_TIMEOUT_MS = 10_000
 
 export type RunDaemonOptions<Protocol extends ProtocolDefinition> = {
   app: string
   socketPath?: string
   pidPath?: string
+  /** Boot mutex path. Default `${pidPath}.lock`. */
+  lockPath?: string
+  /**
+   * Budget for taking the boot mutex. Default 10000ms — a concurrent `stopDaemon` can
+   * hold it for `killTimeoutMs` plus the SIGKILL grace, and waiting that out is correct.
+   */
+  lockTimeoutMs?: number
   /** Build the Enkaku server for one accepted connection's transport. */
   serve: (transport: ServerTransportOf<Protocol>) => Server<Protocol>
   /**
@@ -48,37 +62,6 @@ export type DaemonHandle = {
   pidPath: string
   /** Idempotent: stop accepting, destroy connections, run onShutdown, clean up. */
   close(): Promise<void>
-}
-
-/**
- * Take the exclusive lock, reaping a stale one. Losers never unlink anything —
- * that is what closes the split-brain race: a process that did not win the
- * O_EXCL claim has no licence to touch the socket file.
- */
-async function claimOrThrow(pidPath: string, socketPath: string): Promise<DaemonLock> {
-  for (let attempt = 0; attempt < CLAIM_ATTEMPTS; attempt++) {
-    const result = claimDaemonLock(pidPath, {
-      pid: process.pid,
-      socketPath,
-      startedAt: Date.now(),
-      ready: false,
-    })
-    if ('lock' in result) return result.lock
-
-    const status = await classifyState(result.conflict)
-    if (status.state !== 'stale' && status.state !== 'not-running') {
-      throw new DaemonAlreadyRunningError(status.pid, socketPath)
-    }
-    // Stale (or corrupt): reap and retry, but reap ONLY the exact file we
-    // classified. `result.inode` was captured when the conflict was read; passing
-    // it makes `reapLockFile` no-op if a racer reclaimed the lockfile across the
-    // await above — we then loop, re-read the racer's fresh record, and either
-    // win the next claim or throw DaemonAlreadyRunningError against it. Reaping
-    // without the inode would delete the racer's live claim and split-brain one
-    // layer down. A null inode means the file already vanished; just retry.
-    if (result.inode != null) reapLockFile(pidPath, result.inode)
-  }
-  throw new DaemonAlreadyRunningError(readLockRecord(pidPath)?.pid ?? -1, socketPath)
 }
 
 async function withTimeout(work: Promise<void>, timeoutMs: number): Promise<void> {
@@ -112,7 +95,40 @@ async function closeServer(server: NetServer, connections: Set<Socket>): Promise
 }
 
 /**
- * Boot a daemon in the current process. Claims an exclusive lock BEFORE binding,
+ * Remove our socket and our state record, under the boot mutex when it can be taken
+ * INSTANTLY.
+ *
+ * A try-lock, never a waiting acquire: `stopDaemon` holds the mutex for its whole
+ * SIGTERM-and-poll, and what it is waiting for is this very process to exit. Blocking here
+ * would make every stop wait out `killTimeoutMs` and then SIGKILL a daemon whose
+ * `onShutdown` never finished.
+ *
+ * A failed try-lock means someone else holds the mutex, and both possibilities are safe:
+ * a stopper waiting for us (it binds nothing, so our own cleanup is uncontended), or a
+ * booter that found our socket closed, classified us stale, and claimed the state file —
+ * whose fresh record the pid guard refuses to touch. The pid guard is what makes the
+ * removal safe with or without the lock; the lock only narrows the window between reading
+ * the record and acting on it.
+ */
+async function cleanUp(lockPath: string, pidPath: string, socketPath: string): Promise<void> {
+  let lock: FileLock | null = null
+  try {
+    lock = await acquireFileLock(lockPath, { timeout: 0 })
+  } catch {
+    // Held by someone else. Fall through: the pid guard below still applies.
+  }
+  try {
+    if (readDaemonState(pidPath)?.pid === process.pid) {
+      safeRemove(socketPath)
+      removeDaemonState(pidPath)
+    }
+  } finally {
+    lock?.release()
+  }
+}
+
+/**
+ * Boot a daemon in the current process. Claims the boot mutex BEFORE binding,
  * so two concurrent boots cannot both pass a liveness check and unlink each
  * other's socket. Returns a handle; signal handlers are installed by default.
  */
@@ -121,6 +137,7 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
 ): Promise<DaemonHandle> {
   const socketPath = opts.socketPath ?? getSocketPath(opts.app)
   const pidPath = opts.pidPath ?? getPIDPath(opts.app)
+  const lockPath = opts.lockPath ?? getLockPathFor(pidPath)
   const shutdownTimeoutMs = opts.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS
   const handleSignals = opts.handleSignals !== false
 
@@ -135,7 +152,10 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
   mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 })
   mkdirSync(dirname(pidPath), { recursive: true, mode: 0o700 })
 
-  const lock = await claimOrThrow(pidPath, socketPath)
+  const lock = await acquireFileLock(lockPath, {
+    timeout: opts.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS,
+    signal: opts.signal,
+  })
 
   const connections = new Set<Socket>()
   const server = createServer((socket) => {
@@ -156,20 +176,48 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     }
   })
 
-  // Everything from the socket cleanup through the bind runs under the claimed
-  // lock. If any of it throws — a foreign daemon on the socket, an EADDRINUSE
-  // from a lost lockfile race, an EACCES on bind — we must release the lock: no
-  // handle was returned, so the caller has no other way to free it, and a leaked
-  // `ready: false` record blocks legitimate boots until bootGraceMs elapses.
+  // Everything from the classification through the bind runs under the boot mutex. It is
+  // a BOOT mutex, not a presence record: it is released the moment the socket is bound
+  // and the record says `ready`, because holding it for the daemon's lifetime would block
+  // every stop and every status read behind a live daemon.
+  //
+  // `claimedState` — not a re-read of the pid off disk — is what tells the catch below
+  // whether the record on disk is ours to remove. Comparing pids there would be wrong:
+  // several `runDaemon` calls racing the SAME pidPath from inside one process (exactly
+  // what the concurrent-boot tests do) all share `process.pid`, so a loser that never
+  // wrote anything would misidentify the winner's live record as its own and delete it.
+  // Holding the mutex for the whole critical section is what makes the flag sufficient —
+  // nothing else can write to `pidPath` between our own write and our own catch.
+  let claimedState = false
   try {
+    const status = await classifyState(readDaemonState(pidPath))
+    if (status.state === 'running' || status.state === 'running-not-owned') {
+      throw new DaemonAlreadyRunningError(status.pid, socketPath)
+    }
+    // `not-running`, `stale` and `booting` are ALL free to take. `booting` is the
+    // load-bearing one: a `ready: false` record is only ever written inside this section,
+    // by a process holding this mutex. We hold it, so its writer does not, so it is
+    // abandoned. That is a proof — and it is what replaced the old ten-second boot grace,
+    // a guess that failed in both directions (too short: steal a live-but-slow booter's
+    // socket, a split brain; too long: block a legitimate boot behind a corpse).
+
     if (existsSync(socketPath)) {
       if (await isSocketLive(socketPath)) {
-        // A foreign daemon holds the socket without a lockfile. We hold the lock,
-        // but its socket is not ours to steal.
+        // A foreign daemon holds the socket without a state file. We hold the mutex, but
+        // its socket is not ours to steal.
         throw new DaemonAlreadyRunningError(-1, socketPath)
       }
       safeRemove(socketPath)
     }
+
+    const claimed: DaemonState = {
+      pid: process.pid,
+      socketPath,
+      startedAt: Date.now(),
+      ready: false,
+    }
+    writeDaemonState(pidPath, claimed)
+    claimedState = true
 
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
@@ -178,16 +226,22 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
         resolve()
       })
     })
+
+    writeDaemonState(pidPath, { ...claimed, ready: true })
   } catch (err) {
     server.close(() => {})
-    lock.release()
+    // Only ever our own record: a failure BEFORE `writeDaemonState` leaves whatever stale
+    // record was already on disk, which is not ours to remove — the next booter reaps it
+    // under this same mutex.
+    if (claimedState) removeDaemonState(pidPath)
     throw err
+  } finally {
+    lock.release()
   }
+
   // The boot promise has settled; its `reject` would be a no-op for later errors.
   server.removeAllListeners('error')
   server.on('error', (err) => opts.onError?.(err))
-
-  lock.markReady()
 
   let closing: Promise<void> | undefined
 
@@ -220,10 +274,9 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
         await closeServer(server, connections)
         if (opts.onShutdown != null) await withTimeout(opts.onShutdown(), shutdownTimeoutMs)
       } finally {
-        // Always: a rejected or timed-out onShutdown must not leak the socket
-        // file or the lock.
-        safeRemove(socketPath)
-        lock.release()
+        // Always: a rejected or timed-out onShutdown must not leak the socket file or the
+        // state record.
+        await cleanUp(lockPath, pidPath, socketPath)
       }
     })()
     return await closing

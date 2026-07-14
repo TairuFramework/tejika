@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { getDataDir, getPIDPath, getSocketPath, getStateDir } from '../src/paths.js'
+import { getDataDir, getLockPath, getPIDPath, getSocketPath, getStateDir } from '../src/paths.js'
 
 afterEach(() => {
   delete process.env.MYAPP_DATA_DIR
@@ -35,6 +35,19 @@ describe('getPIDPath', () => {
   test('honors the env override first', () => {
     process.env.MYAPP_PID_PATH = '/tmp/custom.pid'
     expect(getPIDPath('myapp')).toBe('/tmp/custom.pid')
+  })
+})
+
+describe('getLockPath', () => {
+  test('derives the lock path from the pid path', () => {
+    expect(getLockPath('myapp')).toBe(`${getPIDPath('myapp')}.lock`)
+  })
+
+  // Derived, never separately configured: one override moves both, so a parent and
+  // its spawned child can never resolve different mutexes.
+  test('follows the pid path override', () => {
+    process.env.MYAPP_PID_PATH = '/tmp/custom.pid'
+    expect(getLockPath('myapp')).toBe('/tmp/custom.pid.lock')
   })
 })
 

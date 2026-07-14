@@ -112,17 +112,27 @@ describe('stopDaemon', () => {
   // The signal was only ever consulted inside the exit poll — i.e. after the kill had
   // already gone out — so an already-aborted caller got `reason: 'aborted'` AND a dead
   // daemon. `runDaemon` refuses an aborted signal up-front; so must this.
+  //
+  // A real daemon — it BINDS the socket its record names, so it classifies as `running`
+  // and WOULD be signalled if the up-front guard were missing. A `booting` record (a
+  // socket-less child under `ready: false`) would never be signalled regardless of the
+  // guard, which would make this assertion hold vacuously; see the sibling `booting` test.
   test('an already-aborted signal prevents the SIGTERM entirely', async () => {
-    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
-      stdio: 'ignore',
-    })
+    const child = spawn(
+      process.execPath,
+      [
+        '-e',
+        `require('net').createServer().listen(${JSON.stringify(socketPath)}, () => console.log('listening'))`,
+      ],
+      { stdio: ['ignore', 'pipe', 'ignore'] },
+    )
     try {
-      await new Promise<void>((resolve) => child.once('spawn', () => resolve()))
+      await new Promise<void>((resolve) => child.stdout?.once('data', () => resolve()))
       writeDaemonState(pidPath, {
         pid: child.pid as number,
         socketPath,
         startedAt: Date.now(),
-        ready: false,
+        ready: true,
       })
 
       const result = await stopDaemon({ app: APP, pidPath, signal: AbortSignal.abort() })

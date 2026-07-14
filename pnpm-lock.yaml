@@ -27,6 +27,9 @@ catalogs:
     '@inkjs/ui':
       specifier: ^2.0.0
       version: 2.0.0
+    '@sozai/lock':
+      specifier: ^0.1.0
+      version: 0.1.0
     '@types/node':
       specifier: ^26.1.1
       version: 26.1.1
@@ -127,6 +130,9 @@ importers:
       '@enkaku/socket':
         specifier: 'catalog:'
         version: 0.19.1
+      '@sozai/lock':
+        specifier: 'catalog:'
+        version: 0.1.0
       '@tejika/env':
         specifier: workspace:^
         version: link:../env
@@ -769,6 +775,9 @@ packages:
   '@sozai/async@0.2.0':
     resolution: {integrity: sha512-bwXozVnxD3DNND76+Hg4zmz5/sBsip1DOeuggR+zLY6LXoI99bOwsty7SU1lD57FwVJLx6Hyp1O5Ka7DfMKUcg==}
 
+  '@sozai/async@0.2.1':
+    resolution: {integrity: sha512-pWJtDAlWSAUpRmqFQluyYKHuoQFOLmdy9/WT0EBWvqWTTe6s/Vy8+e2BxS2YMOK6vwsPuwSSEOlf6PvdF597+A==}
+
   '@sozai/codec@0.2.0':
     resolution: {integrity: sha512-HBbJY76Vso59kGJMxgGAtcnPYugY5TCWR4lhzJsjjtaX1oTs1F8SUWliUmgcRJZfHmnJO4tY03J7C/iy6SqXvw==}
 
@@ -777,6 +786,9 @@ packages:
 
   '@sozai/execution@0.2.0':
     resolution: {integrity: sha512-9beq2wuO+sIUqp7dClhkkf5R2iFMqdkS6KoyYwBI4iDT0XjhFZcc3ueqmiq7x2fQqiOiSg45m3hPTUnU2PsVPQ==}
+
+  '@sozai/lock@0.1.0':
+    resolution: {integrity: sha512-A9Gkw7DlG7kj0wDlK9RuUMd+PIZoIFlRAI19TCTmPW/G7wvx/c1/OQ8b66d4rFQZVkpeb6G/GAyOglx8rC84BA==}
 
   '@sozai/log@0.1.0':
     resolution: {integrity: sha512-vhCp3GK9UguYwopntaz6/juJSKFpB9GAAsKC9nxdakdQrD/Ix4r5fmZWIPArNtynbzsaUwdVoFYmDzbu90UNxg==}
@@ -2549,6 +2561,8 @@ snapshots:
 
   '@sozai/async@0.2.0': {}
 
+  '@sozai/async@0.2.1': {}
+
   '@sozai/codec@0.2.0':
     dependencies:
       canonicalize: 3.0.0
@@ -2561,6 +2575,10 @@ snapshots:
     dependencies:
       '@sozai/async': 0.2.0
       '@sozai/result': 0.1.1
+
+  '@sozai/lock@0.1.0':
+    dependencies:
+      '@sozai/async': 0.2.1
 
   '@sozai/log@0.1.0':
     dependencies:

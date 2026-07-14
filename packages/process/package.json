@@ -27,6 +27,7 @@
     "@enkaku/protocol": "catalog:",
     "@enkaku/server": "catalog:",
     "@enkaku/socket": "catalog:",
+    "@sozai/lock": "catalog:",
     "@tejika/env": "workspace:^",
     "nano-spawn": "catalog:"
   },

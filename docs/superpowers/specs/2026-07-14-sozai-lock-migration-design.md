@@ -172,22 +172,47 @@ becomes a new `reason: 'busy'`; anything else, such as `EACCES`, is the existing
 ## Close
 
 The daemon does **not** hold the mutex while serving — it released it at the end of boot.
-So `DaemonHandle.close()` must retake it before removing the socket and the state file, or
-it can delete a newcomer's fresh record.
+So `DaemonHandle.close()` retakes it before removing the socket and the state file, or it
+can delete a newcomer's fresh record.
+
+It retakes it with a **try-lock**, never a waiting acquire:
 
 ```ts
 await closeServer(server, connections)
 await opts.onShutdown?.()
-using lock = await acquireFileLock(lockPath, { timeout: 5_000 })  // best-effort
-if (readDaemonState(pidPath)?.pid === process.pid) {
-  safeRemove(socketPath)
-  removeDaemonState(pidPath)
+
+let lock: FileLock | null = null
+try {
+  lock = await acquireFileLock(lockPath, { timeout: 0 })
+} catch {
+  // Someone else holds it. The pid guard below still applies.
+}
+try {
+  if (readDaemonState(pidPath)?.pid === process.pid) {
+    safeRemove(socketPath)
+    removeDaemonState(pidPath)
+  }
+} finally {
+  lock?.release()
 }
 ```
 
-The pid guard runs inside the lock, as belt and braces. If the acquire itself fails, the
-pid-guarded removal still runs and the failure is reported via `onError`: leaving a stale
-record behind is worse than a residual race the next booter reaps anyway.
+A *waiting* acquire here deadlocks against `stopDaemon`. The stop holds the mutex for the
+whole SIGTERM-and-poll, and what it is waiting for is this very process to exit — so a
+close that blocks on the mutex makes every stop wait out `killTimeoutMs` and then SIGKILL
+a daemon whose `onShutdown` never finished. A try-lock cannot deadlock.
+
+A failed try-lock means someone else holds the mutex, and both possibilities are safe:
+
+- **A stopper**, waiting for us. It binds nothing and it removes nothing until we are
+  gone, so removing our own socket and our own record is uncontended.
+- **A booter**. It found our socket closed, classified us `stale`, and claimed the state
+  file for itself — so the record no longer names our pid, and the guard refuses to touch
+  it.
+
+The pid guard is what makes the cleanup safe with or without the lock; holding the lock
+only narrows the window between reading the record and acting on it. Leaving a stale
+record behind is worse than that residual race, which the next booter reaps anyway.
 
 ## Dependency
 

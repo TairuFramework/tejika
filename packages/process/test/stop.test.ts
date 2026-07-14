@@ -65,7 +65,12 @@ describe('stopDaemon', () => {
   test('a held mutex resolves as busy, not as an error', async () => {
     const held = await acquireFileLock(lockPath, { timeout: 0 })
     try {
-      writeDaemonState(pidPath, { pid: process.pid, socketPath, startedAt: Date.now(), ready: true })
+      writeDaemonState(pidPath, {
+        pid: process.pid,
+        socketPath,
+        startedAt: Date.now(),
+        ready: true,
+      })
       await expect(stopDaemon({ app: APP, pidPath, lockTimeoutMs: 0 })).resolves.toEqual({
         stopped: false,
         reason: 'busy',

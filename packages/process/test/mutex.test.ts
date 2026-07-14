@@ -80,10 +80,13 @@ test('a boot blocked on the mutex proceeds as soon as it is released', async () 
     settled = true
   })
 
-  await delay(200)
-  expect(settled).toBe(false)
+  try {
+    await delay(200)
+    expect(settled).toBe(false)
+  } finally {
+    held.release()
+  }
 
-  held.release()
   const handle = await booting
   expect(handle.pid).toBe(process.pid)
   await expect(isSocketLive(socketPath)).resolves.toBe(true)
@@ -91,9 +94,10 @@ test('a boot blocked on the mutex proceeds as soon as it is released', async () 
 
 // A booter SIGKILLed between writing its `ready: false` record and binding leaves that
 // record behind naming a live-looking pid. The old code waited out a ten-second boot grace
-// before it dared reclaim it. The mutex proves it instead: we hold the mutex, a `ready:
-// false` record is only written under the mutex, so its writer does not hold it, so it is
-// abandoned — and abandoned records are taken NOW.
+// before it dared reclaim it. This test writes exactly that abandoned `ready: false` record
+// itself — no mutex is held here — and proves the boot reclaims it immediately, with no
+// clock elapsing. The contested-mutex side of the property — that a boot actually waits out
+// a lock someone else is holding — is covered by the two lock-contention tests above.
 test('an abandoned booting record is taken immediately, with no grace period', async () => {
   // A live process that is not a daemon: exactly what a recycled pid looks like.
   const impostor = spawnChild(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
@@ -140,17 +144,24 @@ test('a stop and a boot never interleave', { timeout: 30_000 }, async () => {
   await delay(50)
   const booting = boot({ lockTimeoutMs: 10_000 })
 
-  const stopped = await stopping
-  expect(stopped).toEqual({ stopped: true, pid: childPID })
-  // A blocking cleanup in the daemon would make this ~5s (killTimeoutMs) or ~7s (plus the
-  // SIGKILL grace) rather than a prompt SIGTERM shutdown.
-  expect(Date.now() - started).toBeLessThan(3_000)
+  try {
+    const stopped = await stopping
+    expect(stopped).toEqual({ stopped: true, pid: childPID })
+    // A blocking cleanup in the daemon would make this ~5s (killTimeoutMs) or ~7s (plus the
+    // SIGKILL grace) rather than a prompt SIGTERM shutdown.
+    expect(Date.now() - started).toBeLessThan(3_000)
 
-  const handle = await booting
-  expect(handle.pid).toBe(process.pid)
-  await expect(isSocketLive(socketPath)).resolves.toBe(true)
-  // The stop's removal must not have taken the new daemon's record with it: the record on
-  // disk names the booter, and it is ready.
-  expect(readDaemonState(pidPath)?.pid).toBe(process.pid)
-  expect(readDaemonState(pidPath)?.ready).toBe(true)
+    const handle = await booting
+    expect(handle.pid).toBe(process.pid)
+    await expect(isSocketLive(socketPath)).resolves.toBe(true)
+    // The stop's removal must not have taken the new daemon's record with it: the record on
+    // disk names the booter, and it is ready.
+    expect(readDaemonState(pidPath)?.pid).toBe(process.pid)
+    expect(readDaemonState(pidPath)?.ready).toBe(true)
+  } finally {
+    // However this test resolves, `booting` must always be settled and its rejection
+    // handled: an abandoned in-process boot could otherwise still be mid-flight when
+    // `afterEach` runs, or surface as an unhandled rejection.
+    await booting.catch(() => undefined)
+  }
 })

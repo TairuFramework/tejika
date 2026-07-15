@@ -42,12 +42,9 @@ function isGone(pid: number): boolean {
 }
 
 /**
- * Poll until the process exits. Budget exhausted returns false — the caller
- * escalates or reports a timeout. A CALLER abort is not a timeout: it throws the
- * original `AbortError`, which `stopDaemon` catches and turns into a
- * `reason: 'aborted'` result rather than reporting a timeout, preserving its
- * own never-throws invariant. `timedOut()` is the arbiter, so the two are told
- * apart even when the abort and the final timer land in the same tick.
+ * Poll until the process exits. Budget exhausted returns false (caller escalates). A caller
+ * abort is not a timeout: it throws `AbortError`, which `stopDaemon` maps to
+ * `reason: 'aborted'`. `timedOut()` arbitrates when abort and final timer share a tick.
  */
 async function pollUntilGone(pid: number, deadline: Deadline): Promise<boolean> {
   for (;;) {
@@ -65,13 +62,9 @@ async function pollUntilGone(pid: number, deadline: Deadline): Promise<boolean> 
 }
 
 /**
- * Send a signal, treating "already exited" as success. ESRCH between the status
- * read and the kill means the daemon exited on its own — a race we win, not an
- * error. Returns a terminal result, or null to continue.
- *
- * Never throws, because `stopDaemon` never throws: an unexpected errno becomes a
- * `reason: 'error'` result rather than a rejection. `kill` is injectable because
- * no real errno other than ESRCH/EPERM can be provoked against a valid pid.
+ * Send a signal, treating ESRCH (already exited) as success. Returns a terminal result, or
+ * null to continue. Never throws — an unexpected errno becomes `reason: 'error'`. `kill` is
+ * injectable because no errno but ESRCH/EPERM can be provoked against a valid pid.
  */
 export function signalTolerantly(
   pid: number,
@@ -80,11 +73,9 @@ export function signalTolerantly(
     process.kill(target, sig)
   },
 ): StopResult | null {
-  // Defence in depth at the authority that does the killing: `process.kill(0, sig)`
-  // signals the ENTIRE process group — the CLI that called us included — and
-  // `kill(-1, sig)` every process this user may signal. `isDaemonState` already
-  // refuses a non-positive pid, so nothing should arrive here; if something does,
-  // it is not a daemon and must not be signalled.
+  // Defence in depth: `process.kill(0, sig)` signals the whole process group (the calling
+  // CLI included), `kill(-1, sig)` every process this user may signal. `isDaemonState`
+  // already refuses a non-positive pid; one reaching here is not a daemon — do not signal it.
   if (!Number.isInteger(pid) || pid <= 0) return { stopped: false, pid, reason: 'not-running' }
   try {
     kill(pid, signal)
@@ -98,39 +89,28 @@ export function signalTolerantly(
 }
 
 /**
- * The critical section: classify, signal, wait, remove. Runs with the mutex HELD, which
- * is what lets every removal here be unconditional — no racer can write the state file
- * while we hold it, so the file we read is still the file we remove. That deletes the old
- * inode-guarded reap and its "or a rewrite of it that still names the pid we stopped"
- * fallback, both of which existed only to survive check-then-act.
- *
- * Never throws: `stopDaemon`'s contract is that it always resolves.
+ * Critical section: classify, signal, wait, remove — with the mutex HELD, which makes every
+ * removal here unconditional (no racer can rewrite the file we read). Never throws:
+ * `stopDaemon` always resolves.
  */
 async function stopLocked(pidPath: string, opts: StopDaemonOptions): Promise<StopResult> {
-  // `pid` is set as soon as a classification names one, BEFORE anything that could throw
-  // (including the `stale` branch's `removeDaemonState`) — so the catch below can report
-  // it on every failing path, not only the ones after the SIGTERM.
+  // Set `pid` as soon as a classification names one, before anything that could throw, so
+  // the catch reports it on every failing path.
   let pid: number | undefined
   try {
     const status = await classifyState(readDaemonState(pidPath))
 
     if (status.state === 'not-running') return { stopped: false, reason: 'not-running' }
     pid = status.pid
-    // `booting` is reaped exactly like `stale`, and its pid is NEVER signalled. The proof:
-    // a `ready: false` record is only ever written from inside this same mutex, so a
-    // `ready: false` record read while HOLDING the mutex was written by a process that does
-    // not hold it — its writer is gone, and the record is abandoned by construction. The pid
-    // on it is therefore not our daemon: either it is dead (and `classifyState` already said
-    // `stale`), or it is a RECYCLED pid naming an arbitrary live process — a stranger. The
-    // state file outlives a reboot (`getStateDir`, i.e. `~/.config/<app>`), so a daemon
-    // SIGKILLed between its claim and its `ready: true` write leaves exactly such a record
-    // behind for a post-reboot `stop` to find. Signalling it would SIGTERM, wait
-    // `killTimeoutMs`, and then SIGKILL an innocent process. `runDaemon` draws this same
-    // conclusion and reclaims a `booting` record on the spot; the two paths must agree.
-    // Note the asymmetry that makes this the ONE dangerous classification: a recycled pid on
-    // a `ready: true` record is caught, because `classifyState` probes its socket and demotes
-    // it to `stale`. `booting` has no such corroboration — nothing to probe — so the only
-    // safe act is to remove the record, which the mutex licenses unconditionally.
+    // FOOTGUN: `booting` is reaped like `stale`, its pid NEVER signalled. Proof: a
+    // `ready: false` record is only written from inside this mutex, so one read while HOLDING
+    // the mutex was written by a process that does not — abandoned by construction. Its pid is
+    // not our daemon: either dead (already `stale`), or a RECYCLED pid naming an arbitrary live
+    // process. The state file outlives a reboot (`~/.config/<app>`), so a daemon SIGKILLed
+    // between claim and `ready: true` leaves exactly this record for a post-reboot `stop` —
+    // signalling it would SIGKILL a stranger. Unlike a `ready: true` recycled pid (which
+    // `classifyState` demotes to `stale` via the socket probe), `booting` has nothing to
+    // probe, so the only safe act is to remove the record. `runDaemon` reclaims it the same way.
     if (status.state === 'stale' || status.state === 'booting') {
       removeDaemonState(pidPath)
       return { stopped: false, pid, reason: 'not-running' }
@@ -161,10 +141,9 @@ async function stopLocked(pidPath: string, opts: StopDaemonOptions): Promise<Sto
     }
     return { stopped: false, pid, reason: 'timeout' }
   } catch (err) {
-    // A CALLER abort is what normally reaches here: `pollUntilGone` resolves budget
-    // exhaustion internally via `timedOut()` rather than throwing. Honor the
-    // never-throws invariant by reporting it as a result instead of rejecting —
-    // the daemon's fate is genuinely unknown, so 'aborted' rather than a guess.
+    // A caller abort normally lands here (`pollUntilGone` resolves budget exhaustion via
+    // `timedOut()`, not a throw). Honor never-throws: report it, and 'aborted' rather than
+    // a guessed outcome — the daemon's fate is genuinely unknown.
     if ((err as { name?: string }).name === 'AbortError') {
       return { stopped: false, pid, reason: 'aborted' }
     }
@@ -173,27 +152,19 @@ async function stopLocked(pidPath: string, opts: StopDaemonOptions): Promise<Sto
 }
 
 /**
- * Stop the daemon named by the state file, under the boot mutex — so a `runDaemon` racing
- * this either precedes it or waits it out, and can never bind a socket while we are
- * killing its predecessor.
+ * Stop the daemon named by the state file, under the boot mutex — so a racing `runDaemon`
+ * precedes or waits it out, never binding while we kill its predecessor. Never throws:
+ * every outcome, including a mid-stop caller abort (`reason: 'aborted'`), is a `StopResult`.
  *
- * Never throws: every outcome, including the caller's own `signal` aborting mid-stop,
- * resolves as a `StopResult`. A caller abort resolves with `reason: 'aborted'` rather
- * than `reason: 'timeout'` — the daemon's fate is genuinely unknown at that point, and
- * reporting a timeout would be a lie.
- *
- * A stop can hold the mutex for `killTimeoutMs` plus the SIGKILL grace. The daemon it is
- * killing must therefore NOT block on the mutex in its own shutdown path — see `cleanUp`
- * in `daemon.ts`.
+ * FOOTGUN: holds the mutex for up to `killTimeoutMs` + SIGKILL grace, so the daemon it kills
+ * must NOT block on the mutex in its own shutdown — see `cleanUp` in `daemon.ts`.
  */
 export async function stopDaemon(opts: StopDaemonOptions): Promise<StopResult> {
   const pidPath = opts.pidPath ?? getPIDPath(opts.app)
   const lockPath = opts.lockPath ?? getLockPathFor(pidPath)
 
-  // Refuse up-front, exactly like `runDaemon`. The signal used to be consulted
-  // only inside the exit poll — i.e. after the SIGTERM had already gone out — so
-  // an already-aborted caller got `reason: 'aborted'` AND a killed daemon.
-  // Aborted means "do not do this", not "do it and tell me you didn't".
+  // Refuse up-front, like `runDaemon`: the signal used to be consulted only inside the exit
+  // poll (after the SIGTERM), so an already-aborted caller got 'aborted' AND a killed daemon.
   if (opts.signal?.aborted === true) return { stopped: false, reason: 'aborted' }
 
   try {
@@ -202,10 +173,8 @@ export async function stopDaemon(opts: StopDaemonOptions): Promise<StopResult> {
       signal: opts.signal,
     })
   } catch (err) {
-    // This is a net for the ACQUIRE (the common case — `stopLocked`'s own try/catch
-    // resolves every outcome it knows about) AND for anything the critical section
-    // failed to handle, so treat an error landing here as "acquire or unhandled",
-    // not as proof it came from the acquire.
+    // Net for the ACQUIRE (common case — `stopLocked` resolves its own outcomes) and for
+    // anything the critical section failed to handle.
     if (err instanceof TimeoutInterruption) {
       // Someone is booting or stopping this daemon and will not let go. Not a failure of
       // the stop, and not a timeout waiting for the daemon to die: a distinct outcome.

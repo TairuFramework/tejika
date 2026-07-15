@@ -29,19 +29,16 @@ function checkLiveness(pid: number, kill: StatusDeps['kill']): Liveness {
     kill(pid, 0)
     return 'alive'
   } catch (err) {
-    // Only ESRCH means the process is gone. EPERM means it exists and belongs to
-    // another user — treating that as dead would reap a live daemon's state file
-    // and, in stopDaemon, signal an innocent process.
+    // Only ESRCH means gone. EPERM means alive but another user's — treating it as dead
+    // would reap a live daemon's record and, in stopDaemon, signal an innocent process.
     return (err as NodeJS.ErrnoException).code === 'EPERM' ? 'not-owned' : 'dead'
   }
 }
 
 /**
- * Classify a daemon presence record. Pure, lock-free, and CLOCK-FREE: there is no boot
- * grace any more. An unready record with a live pid is `booting` however old it is —
- * deciding whether such a record is abandoned is the boot mutex's job, and the boot path
- * decides it by proof (a `ready: false` record read while holding the mutex was written by
- * a process that does not hold it) rather than by guessing at a timeout.
+ * Classify a presence record. Pure, lock-free, CLOCK-FREE: an unready record with a live
+ * pid is `booting` however old it is. Whether it is abandoned is the boot mutex's call,
+ * decided by proof (see `daemon.ts`), not a timeout.
  */
 export async function classifyState(
   state: DaemonState | null,
@@ -62,18 +59,15 @@ export async function classifyState(
   }
 
   if ((await deps.probe(state.socketPath)) === 'dead') {
-    // The pid is alive but its socket is not. Either the pid was recycled, or the
-    // daemon's socket file was unlinked out from under it. Both leave the daemon
-    // unreachable by every client, so reclaiming the state file is correct.
+    // Pid alive but socket dead: recycled pid, or the socket was unlinked. Either way no
+    // client can reach it, so reclaiming the record is correct.
     return { state: 'stale', pid: state.pid }
   }
   return { state: 'running', pid: state.pid, socketPath: state.socketPath }
 }
 
-/**
- * Classify the daemon's state file. Pure: never reaps, never blocks. Reaping belongs to
- * the boot and stop paths, which do it under the mutex.
- */
+/** Classify the daemon's state file. Pure: never reaps, never blocks — reaping belongs to
+ * the boot and stop paths, under the mutex. */
 export async function getDaemonStatus(opts: {
   app: string
   pidPath?: string

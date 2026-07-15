@@ -22,11 +22,9 @@ export function getPIDPath(app: string): string {
 }
 
 /**
- * The daemon boot mutex, beside the pidfile. Derived rather than separately
- * configurable on purpose: a `LOCK_PATH` override could resolve differently in a
- * spawned child than in its parent (see the `--pid-path` note in `@tejika/process`'s
- * `spawnDaemon`), and two processes on different mutexes is exactly the split brain
- * the mutex exists to prevent.
+ * Daemon boot mutex, beside the pidfile. Derived, never separately configurable: a
+ * `LOCK_PATH` override could resolve differently in a spawned child than its parent, and
+ * two processes on different mutexes is the split brain the mutex exists to prevent.
  */
 export function getLockPath(app: string): string {
   return `${getPIDPath(app)}.lock`

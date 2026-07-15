@@ -95,44 +95,31 @@ async function closeServer(server: NetServer, connections: Set<Socket>): Promise
 }
 
 /**
- * The current owner of each `pidPath` WITHIN this process, as a token unique to one
- * successful boot.
+ * Current owner of each `pidPath` WITHIN this process, one token per successful boot.
  *
- * The pid guard alone cannot scope a cleanup to the boot that owns it: two daemons booted
- * on the same `pidPath` from ONE process share `process.pid`, so a shutting-down daemon
- * would happily read its successor's record, recognise its own pid, and delete a live
- * daemon's socket and record. That successor is not exotic — the mutex is deliberately not
- * held across `onShutdown` (up to `shutdownTimeoutMs`), and in that window a re-boot on the
- * same path classifies the closing daemon as `stale` (its socket no longer accepts) and
- * legitimately takes over. The token distinguishes "my own record" from "a sibling boot's
- * record that happens to carry my pid"; a whole-record comparison would not, since two boots
- * in one process can share a `startedAt` millisecond.
+ * FOOTGUN the token exists for: the pid guard alone cannot scope a cleanup, because two
+ * daemons booted on one `pidPath` from one process share `process.pid` — so a shutting-down
+ * daemon would read its successor's record, recognise its own pid, and delete a live daemon.
+ * That successor is normal: the mutex is not held across `onShutdown`, and a re-boot in that
+ * window classifies the closer as `stale` and takes over. The token tells "my record" from "a
+ * sibling boot's record with my pid"; `startedAt` cannot (two boots can share a ms).
  *
- * KEYED ON THE RESOLVED PATH, exactly as `@sozai/lock` keys its own in-process queue, and
- * for the same reason: `./app.pid` and `/abs/app.pid` are ONE file but two strings. Keyed
- * on the raw string, two boots of the same file from one process land in different entries,
- * so a predecessor's `cleanUp` guard passes against a live successor's record — and the pid
- * guard cannot save it, because both boots share `process.pid`.
+ * KEYED ON THE RESOLVED PATH, like `@sozai/lock`'s own queue: `./app.pid` and `/abs/app.pid`
+ * are one file, two strings — keyed raw, a predecessor's guard passes against a live successor.
  */
 const stateOwners = new Map<string, symbol>()
 
 /**
- * Remove our socket and our state record, under the boot mutex when it can be taken
- * INSTANTLY.
+ * Remove our socket and record, under the boot mutex if it can be taken INSTANTLY.
  *
- * A try-lock, never a waiting acquire: `stopDaemon` holds the mutex for its whole
- * SIGTERM-and-poll, and what it is waiting for is this very process to exit. Blocking here
- * would make every stop wait out `killTimeoutMs` and then SIGKILL a daemon whose
- * `onShutdown` never finished.
+ * FOOTGUN: a try-lock, NEVER a waiting acquire. `stopDaemon` holds the mutex through its whole
+ * SIGTERM-and-poll, waiting for THIS process to exit — so blocking here would make every stop
+ * burn `killTimeoutMs` then SIGKILL a daemon whose `onShutdown` never finished.
  *
- * A failed try-lock means someone else holds the mutex, and both possibilities are safe:
- * a stopper waiting for us (it binds nothing, so our own cleanup is uncontended), or a
- * booter that found our socket closed, classified us stale, and claimed the state file —
- * whose fresh record the guards below refuse to touch, because the successor publishes its
- * owner token WITH the claim, not after the bind: the record is `stateOwners`-owned by
- * someone else from the instant it exists on disk. Two guards, one per direction:
- * the on-disk pid rejects a FOREIGN process's record, and the owner token rejects another
- * boot from THIS process. The lock only narrows the window between reading and acting.
+ * A failed try-lock is safe: the holder is either a stopper waiting for us (binds nothing) or
+ * a booter that classified us stale and re-claimed — whose fresh record the two guards refuse
+ * to touch (on-disk pid rejects a foreign process, owner token rejects another boot of ours).
+ * The lock only narrows the read-act window.
  */
 async function cleanUp(
   lockPath: string,
@@ -175,10 +162,8 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
   const shutdownTimeoutMs = opts.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS
   const handleSignals = opts.handleSignals !== false
 
-  // An already-aborted signal used to be ignored silently: adding an `abort`
-  // listener to it never fires, so the daemon booted, claimed the lock, bound the
-  // socket, and simply never closed. Aborting means "do not run" — say so before
-  // claiming anything, and propagate the caller's own reason untouched.
+  // An already-aborted signal used to be ignored (its `abort` never fires), so the daemon
+  // booted and never closed. Aborting means "do not run" — say so before claiming anything.
   if (opts.signal?.aborted === true) throw opts.signal.reason
 
   // 0o700 before the bind: the socket is unreachable during the window between
@@ -210,21 +195,14 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     }
   })
 
-  // Everything from the classification through the bind runs under the boot mutex. It is
-  // a BOOT mutex, not a presence record: it is released the moment the socket is bound
-  // and the record says `ready`, because holding it for the daemon's lifetime would block
-  // every stop and every status read behind a live daemon.
+  // Classification through bind runs under the BOOT mutex — released the moment the socket
+  // binds and the record is `ready`, since holding it for the daemon's life would block every
+  // stop and status read.
   //
-  // `claimedState` — not a re-read of the pid off disk — is what tells the catch below
-  // whether the record on disk is ours to remove. Comparing pids there would be wrong:
-  // several `runDaemon` calls racing the SAME pidPath from inside one process (exactly
-  // what the concurrent-boot tests do) all share `process.pid`, so a loser that never
-  // wrote anything would misidentify the winner's live record as its own and delete it.
-  // The flag is sound without claiming exclusivity the mutex does not provide: a closing
-  // daemon's `cleanUp` can still REMOVE a record without the mutex (its try-lock may fail
-  // — that is the design), but a removal can only turn our own record into no record. It
-  // can never put a foreign record under our flag, so the flag never authorises deleting
-  // one; at worst `removeDaemonState` unlinks a path that is already gone.
+  // `claimedState`, not a re-read of the on-disk pid, tells the catch whether the record is
+  // ours: several `runDaemon` calls racing one pidPath in one process share `process.pid`, so
+  // a pid compare would let a loser delete the winner's record. The flag never authorises
+  // deleting a foreign record; at worst it unlinks an already-gone path.
   const owner = Symbol('daemon-owner')
   let claimedState = false
   try {
@@ -232,19 +210,17 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     if (status.state === 'running' || status.state === 'running-not-owned') {
       throw new DaemonAlreadyRunningError(status.pid, socketPath)
     }
-    // `not-running`, `stale` and `booting` are ALL free to take. `booting` is the
-    // load-bearing one: a `ready: false` record is only ever written inside this section,
-    // by a process holding this mutex. We hold it, so its writer does not, so it is
-    // abandoned. That is a proof — and it is what replaced the old ten-second boot grace,
-    // a guess that failed in both directions (too short: steal a live-but-slow booter's
-    // socket, a split brain; too long: block a legitimate boot behind a corpse).
+    // `not-running`, `stale`, `booting` are all free to take. `booting` is load-bearing: a
+    // `ready: false` record is only written inside this section by a mutex holder — we hold
+    // it, so its writer does not, so it is abandoned. This proof replaced the old ten-second
+    // boot grace, a guess that failed both ways (too short: steal a slow booter's socket, a
+    // split brain; too long: block a legitimate boot behind a corpse).
 
     if (existsSync(socketPath)) {
       if (await isSocketLive(socketPath)) {
-        // A foreign daemon holds the socket without a state file. We hold the mutex, but
-        // its socket is not ours to steal. Its pid is genuinely unknown — nothing names it —
-        // so the error carries no pid rather than the `-1` it used to, which any consumer
-        // passing `err.pid` to `process.kill` would have fired at every process it may signal.
+        // A foreign daemon holds the socket with no state file. We hold the mutex but its
+        // socket is not ours to steal. Its pid is unknown, so the error carries none rather
+        // than the old `-1` that a consumer passing `err.pid` to `process.kill` would fire.
         throw new DaemonAlreadyRunningError(undefined, socketPath)
       }
       safeRemove(socketPath)
@@ -258,10 +234,10 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     }
     writeDaemonState(pidPath, claimed)
     claimedState = true
-    // With the claim, not after the bind: from the instant the record on disk is ours, no
-    // earlier boot of this process may remove it, or the socket underneath it. Publishing
-    // it later would leave the claim-to-bind window unguarded — a predecessor still inside
-    // `onShutdown` would read OUR fresh record, see no owner yet, and delete it.
+    // With the claim, NOT after the bind: from the instant the record is ours, no earlier
+    // boot of this process may remove it. Publishing later leaves the claim-to-bind window
+    // unguarded — a predecessor in `onShutdown` would read our fresh record, see no owner,
+    // and delete it.
     stateOwners.set(ownerKey, owner)
 
     await new Promise<void>((resolve, reject) => {
@@ -275,12 +251,9 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     writeDaemonState(pidPath, { ...claimed, ready: true })
   } catch (err) {
     server.close(() => {})
-    // Only ever our own record: a failure BEFORE `writeDaemonState` leaves whatever stale
-    // record was already on disk, which is not ours to remove — the next booter reaps it
-    // under this same mutex.
+    // Only our own record: a failure before `writeDaemonState` leaves the prior stale record,
+    // which the next booter reaps under this mutex.
     if (claimedState) removeDaemonState(pidPath)
-    // Only ever our own entry: drop the claim we just published so a failed boot leaves
-    // no trace for the guards below to trip over.
     if (stateOwners.get(ownerKey) === owner) stateOwners.delete(ownerKey)
     throw err
   } finally {

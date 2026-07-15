@@ -15,8 +15,9 @@ export type WaitForDaemonOptions = {
 /**
  * Poll until the daemon reports `running`; resolve its pid. Throws on timeout:
  * an assertion that never sees the daemon running must fail loudly.
- * A daemon claims its lockfile BEFORE binding its socket, so a record on disk is
- * not proof of readiness — `booting` is deliberately not accepted here.
+ * A daemon writes its presence record (the pidfile) BEFORE binding its socket — exclusion
+ * is a separate, short-lived mutex — so a record on disk is not proof of readiness:
+ * `booting` is deliberately not accepted here.
  */
 export async function waitForDaemonRunning(options: WaitForDaemonOptions): Promise<number> {
   const { pidPath, timeoutMs = 5_000, intervalMs = 100 } = options
@@ -35,8 +36,8 @@ export async function waitForDaemonRunning(options: WaitForDaemonOptions): Promi
 }
 
 /**
- * Poll until the lockfile is gone or names a dead process. Returns on timeout
- * instead of throwing: teardown tolerates a stuck daemon.
+ * Poll until the presence record (the pidfile) is gone or names a dead process. Returns on
+ * timeout instead of throwing: teardown tolerates a stuck daemon.
  */
 export async function waitForDaemonStopped(options: WaitForDaemonOptions): Promise<void> {
   const { pidPath, timeoutMs = 5_000, intervalMs = 100 } = options

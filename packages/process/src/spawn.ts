@@ -4,9 +4,9 @@ import { getDataDir, getPIDPath, getSocketPath } from '@tejika/env'
 import spawn from 'nano-spawn'
 import { createDeadline, type Deadline } from './deadline.js'
 import { DaemonBootError } from './errors.js'
-import { readLockRecord } from './lock.js'
 import { waitForSocket } from './socket.js'
-import { classifyRecord, DEFAULT_BOOT_GRACE_MS } from './status.js'
+import { readDaemonState } from './state.js'
+import { classifyState } from './status.js'
 
 export type SpawnDaemonOptions = {
   app: string
@@ -30,28 +30,21 @@ function pending(): Promise<never> {
 }
 
 /**
- * Did SOMEONE ELSE take the lock? Our child exiting is only a boot failure if it
- * is the whole story. Two CLIs cold-starting the same daemon is this design's
- * flagship scenario: one child wins the `O_EXCL` claim and binds, the other loses
- * it, throws `DaemonAlreadyRunningError` and exits nonzero — and that exit
- * reliably beats the socket wait's first 50ms poll. Turning it into a
- * `DaemonBootError` would fail the losing CLI even though the daemon it asked for
- * is coming up healthy under the winner. So when the lock names a LIVE daemon
- * that is not our child, the exit is a loser conceding, not a crash: say nothing
- * and let the socket wait run out its budget against the winner's socket.
+ * Did SOMEONE ELSE claim the state file? A child exiting is only a boot failure if it is the
+ * whole story. Flagship scenario: two CLIs cold-start one daemon, one wins the mutex and binds,
+ * the loser throws `DaemonAlreadyRunningError` and exits nonzero before the socket wait's first
+ * poll. That is a loser conceding, not a crash — say nothing and let the wait run against the
+ * winner's socket.
  */
-async function anotherDaemonHoldsLock(
+async function anotherDaemonHoldsState(
   pidPath: string,
   childPID: number | undefined,
 ): Promise<boolean> {
-  const record = readLockRecord(pidPath)
-  if (record == null || record.pid === childPID) return false
-  const status = await classifyRecord(record, {
-    bootGraceMs: DEFAULT_BOOT_GRACE_MS,
-    now: Date.now(),
-  })
-  // `booting` is not `running` — but it IS a live process holding the lock, and
-  // its socket is exactly what the wait below is waiting for.
+  const state = readDaemonState(pidPath)
+  if (state == null || state.pid === childPID) return false
+  const status = await classifyState(state)
+  // `booting` is not `running` — but it IS a live process that has claimed the state
+  // file, and its socket is exactly what the wait below is waiting for.
   return status.state === 'booting' || status.state === 'running'
 }
 
@@ -62,14 +55,10 @@ async function anotherDaemonHoldsLock(
  */
 export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
   const socketPath = opts.socketPath ?? getSocketPath(opts.app)
-  // Defaulted here, exactly like `socketPath`, and passed to the child
-  // UNCONDITIONALLY. Leaving it undefined made the whole concession check below
-  // inert in the default configuration — the child still locked (`runDaemon`
-  // falls back to `getPIDPath(app)` too), but the parent had no path to read, so
-  // `anotherDaemonHoldsLock` was false and every losing child's exit became a
-  // `DaemonBootError`. Passing it explicitly also removes a parent/child
-  // divergence risk: @tejika/env's PID_PATH override could otherwise resolve
-  // differently in the child whenever `opts.env` differs from our own env.
+  // Defaulted like `socketPath` and passed to the child UNCONDITIONALLY. Left undefined, the
+  // concession check below went inert in the default config (child still locked, but the parent
+  // had no path to read) and every losing child became a `DaemonBootError`. Explicit also avoids
+  // a parent/child divergence: env's PID_PATH override could resolve differently in the child.
   const pidPath = opts.pidPath ?? getPIDPath(opts.app)
   const logPath = opts.logPath ?? join(getDataDir(opts.app), 'daemon.log')
   const deadline = opts.deadline ?? createDeadline(opts.timeoutMs ?? 3000, opts.signal)
@@ -92,7 +81,7 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
       (child) => child.pid,
       () => undefined,
     )
-    if (await anotherDaemonHoldsLock(pidPath, childPID)) return await pending()
+    if (await anotherDaemonHoldsState(pidPath, childPID)) return await pending()
     throw new DaemonBootError(message, { logPath, cause })
   }
 

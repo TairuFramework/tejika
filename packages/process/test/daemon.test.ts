@@ -7,11 +7,12 @@ import { setTimeout as delay } from 'node:timers/promises'
 import type { ClientMessage, ServerMessage, ServerTransportOf } from '@enkaku/protocol'
 import { serve } from '@enkaku/server'
 import { SocketTransport } from '@enkaku/socket'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { type DaemonHandle, type RunDaemonOptions, runDaemon } from '../src/daemon.js'
 import { DaemonAlreadyRunningError } from '../src/errors.js'
-import { readLockRecord } from '../src/lock.js'
 import { isSocketLive } from '../src/socket.js'
+import * as stateModule from '../src/state.js'
+import { readDaemonState } from '../src/state.js'
 import type { PingProtocol } from './fixtures/protocol.js'
 
 const APP = 'tejika-test'
@@ -47,13 +48,13 @@ afterEach(async () => {
 })
 
 describe('runDaemon', () => {
-  test('returns a handle and marks the lock ready', async () => {
+  test('returns a handle and marks the state ready', async () => {
     const handle = await boot()
     expect(handle.pid).toBe(process.pid)
     expect(handle.socketPath).toBe(socketPath)
     expect(handle.pidPath).toBe(pidPath)
     await expect(isSocketLive(socketPath)).resolves.toBe(true)
-    const record = readLockRecord(pidPath)
+    const record = readDaemonState(pidPath)
     expect(record?.ready).toBe(true)
     expect(record?.pid).toBe(process.pid)
   })
@@ -63,20 +64,24 @@ describe('runDaemon', () => {
     await expect(boot()).rejects.toBeInstanceOf(DaemonAlreadyRunningError)
     // The incumbent must survive untouched — this is the split-brain guarantee.
     await expect(isSocketLive(socketPath)).resolves.toBe(true)
-    expect(readLockRecord(pidPath)?.pid).toBe(process.pid)
+    expect(readDaemonState(pidPath)?.pid).toBe(process.pid)
   })
 
-  test('two concurrent boots: exactly one wins, no live socket is unlinked', async () => {
-    const results = await Promise.allSettled([boot(), boot()])
-    const fulfilled = results.filter((r) => r.status === 'fulfilled')
-    const rejected = results.filter((r) => r.status === 'rejected')
-    expect(fulfilled).toHaveLength(1)
-    expect(rejected).toHaveLength(1)
-    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(DaemonAlreadyRunningError)
+  // Deterministic now. It used to depend on an O_EXCL claim landing first, with a
+  // three-attempt reap-and-retry loop behind it; now every loser simply waits for the
+  // winner to release, reads a `running` record, and concedes.
+  test('concurrent boots: exactly one wins, the losers concede, no live socket is unlinked', async () => {
+    const results = await Promise.allSettled([boot(), boot(), boot()])
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    for (const result of results.filter((r) => r.status === 'rejected')) {
+      expect((result as PromiseRejectedResult).reason).toBeInstanceOf(DaemonAlreadyRunningError)
+    }
     await expect(isSocketLive(socketPath)).resolves.toBe(true)
+    expect(readDaemonState(pidPath)?.pid).toBe(process.pid)
+    expect(readDaemonState(pidPath)?.ready).toBe(true)
   })
 
-  test('reclaims a stale lockfile left by a dead process', async () => {
+  test('reclaims a stale state file left by a dead process', async () => {
     // A pid far above any live process, so kill(pid, 0) yields ESRCH.
     writeFileSync(
       pidPath,
@@ -85,13 +90,13 @@ describe('runDaemon', () => {
     )
     const handle = await boot()
     expect(handle.pid).toBe(process.pid)
-    expect(readLockRecord(pidPath)?.pid).toBe(process.pid)
+    expect(readDaemonState(pidPath)?.pid).toBe(process.pid)
   })
 
-  test('reclaims a corrupt lockfile', async () => {
+  test('reclaims a corrupt state file', async () => {
     writeFileSync(pidPath, 'garbage', 'utf8')
     await expect(boot()).resolves.toBeDefined()
-    expect(readLockRecord(pidPath)?.pid).toBe(process.pid)
+    expect(readDaemonState(pidPath)?.pid).toBe(process.pid)
   })
 
   test('removes a stale socket file before binding', async () => {
@@ -110,10 +115,24 @@ describe('runDaemon', () => {
       await expect(boot()).rejects.toBeInstanceOf(DaemonAlreadyRunningError)
       await expect(isSocketLive(socketPath)).resolves.toBe(true)
       // The lock must have been released on the failed boot, not leaked.
-      expect(readLockRecord(pidPath)).toBeNull()
+      expect(readDaemonState(pidPath)).toBeNull()
     } finally {
       await new Promise<void>((resolve) => foreign.close(() => resolve()))
     }
+  })
+
+  // The failure paths that never reach `writeDaemonState` prove nothing about the record
+  // removal: there was no record to begin with, so their `toBeNull()` passes trivially. This
+  // one fails AFTER the record is on disk — the record is written before the bind, and the
+  // bind is what fails — so it is the only test that can catch a boot that leaves a
+  // `ready: false` corpse behind for the next booter to trip over.
+  test('removes the record it wrote when the bind itself fails', async () => {
+    // A `sun_path` longer than the AF_UNIX limit (~104 bytes on darwin): `listen` fails
+    // with EINVAL, deterministically, with no dependence on timing or permissions.
+    const tooLongSocketPath = join(dir, `${'s'.repeat(120)}.sock`)
+    expect(Buffer.byteLength(tooLongSocketPath)).toBeGreaterThan(104)
+    await expect(boot({ socketPath: tooLongSocketPath })).rejects.toThrow()
+    expect(readDaemonState(pidPath)).toBeNull()
   })
 })
 
@@ -136,7 +155,7 @@ describe('DaemonHandle.close', () => {
     const handle = await boot()
     await handle.close()
     await expect(isSocketLive(socketPath)).resolves.toBe(false)
-    expect(readLockRecord(pidPath)).toBeNull()
+    expect(readDaemonState(pidPath)).toBeNull()
   })
 
   test('is idempotent', async () => {
@@ -173,7 +192,7 @@ describe('DaemonHandle.close', () => {
       },
     })
     await expect(handle.close()).rejects.toThrow('cleanup exploded')
-    expect(readLockRecord(pidPath)).toBeNull()
+    expect(readDaemonState(pidPath)).toBeNull()
     await expect(isSocketLive(socketPath)).resolves.toBe(false)
   })
 
@@ -183,7 +202,97 @@ describe('DaemonHandle.close', () => {
       onShutdown: () => new Promise<void>(() => {}),
     })
     await expect(handle.close()).rejects.toThrow(/timed out/i)
-    expect(readLockRecord(pidPath)).toBeNull()
+    expect(readDaemonState(pidPath)).toBeNull()
+  })
+
+  // The pid guard cannot scope a cleanup on its own: a replacement booted in the SAME
+  // process carries the same pid, so a naive `record.pid === process.pid` check lets a
+  // daemon that is still inside `onShutdown` delete its successor's socket and record —
+  // leaving a live daemon invisible to every client and to `getDaemonStatus`, and
+  // unstoppable. The window is real: the boot mutex is deliberately not held across
+  // `onShutdown`, and `close()` is fired un-awaited by `onAbort`.
+  test('does not clean up after a same-process daemon that replaced it mid-shutdown', async () => {
+    let onShutdownEntered = (): void => {}
+    const entered = new Promise<void>((resolve) => {
+      onShutdownEntered = resolve
+    })
+    let releaseShutdown = (): void => {}
+    const held = new Promise<void>((resolve) => {
+      releaseShutdown = resolve
+    })
+
+    const first = await boot({
+      onShutdown: async () => {
+        onShutdownEntered()
+        await held
+      },
+    })
+    const closing = first.close()
+    // The server has stopped accepting, so `server.close()` has already unlinked the
+    // socket file; only the record is still on disk, and the mutex is free: exactly the
+    // state a re-boot classifies as `stale`.
+    await entered
+
+    const second = await boot()
+    expect(second.pid).toBe(process.pid)
+    releaseShutdown()
+    await closing
+
+    // The replacement must still be serving, and still be findable.
+    await expect(isSocketLive(socketPath)).resolves.toBe(true)
+    expect(readDaemonState(pidPath)?.pid).toBe(process.pid)
+    expect(readDaemonState(pidPath)?.ready).toBe(true)
+  })
+
+  // The window the test above does not reach: there, `releaseShutdown()` fires only after
+  // `second` has *fully* booted, so the owner token is already published (even by the buggy
+  // post-bind `stateOwners.set`) before `first`'s `cleanUp` ever runs. Here, `first`'s
+  // `onShutdown` is released from INSIDE `second`'s claim write — the first `ready: false`
+  // write after the claim — so `first`'s `cleanUp` races `second`'s own claim-to-bind
+  // window. The pid guard alone cannot save `second`: both records carry `process.pid`. Only
+  // an owner token published WITH the claim (not after the bind) closes the gap.
+  test('does not let a same-process predecessor delete a claimed-but-not-yet-bound successor', async () => {
+    let onShutdownEntered = (): void => {}
+    const entered = new Promise<void>((resolve) => {
+      onShutdownEntered = resolve
+    })
+    let releaseShutdown = (): void => {}
+    const held = new Promise<void>((resolve) => {
+      releaseShutdown = resolve
+    })
+
+    const first = await boot({
+      onShutdown: async () => {
+        onShutdownEntered()
+        await held
+      },
+    })
+    const closing = first.close()
+    await entered
+
+    const originalWriteDaemonState = stateModule.writeDaemonState
+    let released = false
+    const spy = vi.spyOn(stateModule, 'writeDaemonState').mockImplementation((path, state) => {
+      originalWriteDaemonState(path, state)
+      // The claim write: the record is `second`'s from this instant, but — this is exactly
+      // the bug window — its owner token is not necessarily published yet.
+      if (!released && !state.ready) {
+        released = true
+        releaseShutdown()
+      }
+    })
+
+    try {
+      const second = await boot()
+      await closing
+
+      expect(second.pid).toBe(process.pid)
+      await expect(isSocketLive(socketPath)).resolves.toBe(true)
+      expect(readDaemonState(pidPath)?.pid).toBe(process.pid)
+      expect(readDaemonState(pidPath)?.ready).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   test('is triggered by an AbortSignal', async () => {
@@ -192,7 +301,7 @@ describe('DaemonHandle.close', () => {
     controller.abort()
     await delay(200)
     await expect(isSocketLive(socketPath)).resolves.toBe(false)
-    expect(readLockRecord(pidPath)).toBeNull()
+    expect(readDaemonState(pidPath)).toBeNull()
   })
 
   // The signal outlives the daemon — one process may boot and close several — so
@@ -214,7 +323,7 @@ describe('an already-aborted signal', () => {
   test('refuses to boot, propagating the caller reason, and claims nothing', async () => {
     const caught = await boot({ signal: AbortSignal.abort() }).catch((err: unknown) => err)
     expect((caught as Error).name).toBe('AbortError')
-    expect(readLockRecord(pidPath)).toBeNull()
+    expect(readDaemonState(pidPath)).toBeNull()
     await expect(isSocketLive(socketPath)).resolves.toBe(false)
   })
 })

@@ -1,11 +1,23 @@
-/** A live daemon (or one mid-boot) already holds the lock for this app. */
+/**
+ * A live daemon (or one mid-boot) already holds the socket for this app.
+ *
+ * `pid` is OPTIONAL, and undefined when the daemon is known only by its socket — a foreign
+ * daemon listening with no state record to name it. It used to be `-1` there, which handed
+ * a consumer doing `process.kill(err.pid, 'SIGTERM')` a weapon rather than a pid:
+ * `kill(-1, sig)` signals every process the user may signal, and `kill(0, sig)` the caller's
+ * whole process group. A pid this package cannot vouch for is now simply absent.
+ */
 export class DaemonAlreadyRunningError extends Error {
   #code = 'DAEMON_ALREADY_RUNNING' as const
-  #pid: number
+  #pid?: number
   #socketPath: string
 
-  constructor(pid: number, socketPath: string) {
-    super(`daemon already running (pid ${pid}, socket ${socketPath})`)
+  constructor(pid: number | undefined, socketPath: string) {
+    super(
+      pid == null
+        ? `daemon already running (unknown pid, socket ${socketPath})`
+        : `daemon already running (pid ${pid}, socket ${socketPath})`,
+    )
     this.name = 'DaemonAlreadyRunningError'
     this.#pid = pid
     this.#socketPath = socketPath
@@ -16,7 +28,8 @@ export class DaemonAlreadyRunningError extends Error {
     return this.#code
   }
 
-  get pid(): number {
+  /** Undefined when the running daemon holds the socket without a state record naming it. */
+  get pid(): number | undefined {
     return this.#pid
   }
 

@@ -1,11 +1,9 @@
-import { existsSync } from 'node:fs'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { Client } from '@enkaku/client'
 import type { ProtocolDefinition } from '@enkaku/protocol'
 import { getSocketPath } from '@tejika/env'
 import { createDaemonClient } from './client.js'
 import { createDeadline, type Deadline } from './deadline.js'
-import { probeSocket, safeRemove } from './socket.js'
 import { spawnDaemon } from './spawn.js'
 
 const DEFAULT_TIMEOUT_MS = 10_000
@@ -144,26 +142,15 @@ export async function ensureDaemon<Protocol extends ProtocolDefinition>(
   } catch (err) {
     if (!isConnectError(err)) throw err
 
-    // A refused connection on an existing socket file means a stale socket from a
-    // crashed daemon. `forbidden` means another user's daemon is listening on it —
-    // never unlink that.
-    //
-    // The probe spends the same budget as everything else in this call, so it is
-    // bounded by what is left of it. `timeoutMs` must never reach 0 — that DISABLES
-    // the bound upstream rather than expiring instantly — but an exhausted budget is
-    // moot anyway: an abandoned probe rejects uncoded, classifies as `unknown`, and
-    // `unknown` is not `dead`, so nothing gets unlinked on a cancelled probe.
-    const probeOptions = {
-      timeoutMs: Math.max(1, Math.min(connectTimeoutMs, deadline.remaining())),
-      signal: deadline.signal,
-    }
-    if (
-      existsSync(socketPath) &&
-      (await probeSocket(socketPath, undefined, probeOptions)) === 'dead'
-    ) {
-      safeRemove(socketPath)
-    }
-
+    // No stale-socket reap here, deliberately. This CLI holds NO mutex, so probing the
+    // socket and then unlinking it is a check-then-act on a path that a daemon may claim in
+    // between: CLI-1 probes a stale socket and reads `dead`; before it unlinks, another
+    // daemon takes the boot mutex, reaps that same socket, binds a fresh one and publishes
+    // `ready: true`; CLI-1 resumes and unlinks the LIVE socket. The daemon it just
+    // disconnected is now unreachable AND unstoppable, because the next boot classifies it
+    // `stale` (its socket is gone) and takes over the record — a silent split brain.
+    // `runDaemon` performs the identical reap UNDER the mutex, where the probe's verdict is
+    // still true at the moment it acts on it, so the spawn below covers this with no race.
     await spawnDaemon({
       app: opts.app,
       entry: opts.entry,

@@ -1,6 +1,6 @@
 {
   "name": "@tejika/process",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -27,6 +27,7 @@
     "@enkaku/protocol": "catalog:",
     "@enkaku/server": "catalog:",
     "@enkaku/socket": "catalog:",
+    "@sozai/lock": "catalog:",
     "@tejika/env": "workspace:^",
     "nano-spawn": "catalog:"
   },

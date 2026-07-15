@@ -3,15 +3,16 @@
 Local daemon spawn / lifecycle / Enkaku client reconnect for CLIs built on the
 `@tejika/*` stack.
 
-- `runDaemon` — boot a daemon in the current process. Claims an exclusive
-  pidfile lock before binding its socket (no split-brain boot race), and
+- `runDaemon` — boot a daemon in the current process. Takes a short-lived boot
+  mutex (`@sozai/lock`, at `<pidPath>.lock`) before classifying, cleaning up and
+  binding its socket (no split-brain boot race), writes its presence record, and
   returns a `DaemonHandle`.
 - `ensureDaemon` — connect to a running daemon, spawning and waiting for one if
   none is reachable, under a single time budget.
 - `stopDaemon` — signal a running daemon, wait for it to exit (escalating to
   `SIGKILL`), and report what happened instead of throwing.
-- `getDaemonStatus` — classify a daemon's pidfile into a `state` union, purely
-  (never mutates the filesystem).
+- `getDaemonStatus` — classify a daemon's state file into a `state` union, purely
+  and lock-free (never mutates the filesystem, never blocks behind a boot).
 - `createDaemonClient` / `createDaemonTransport` — connect an Enkaku client to
   a daemon socket, reconnecting automatically on drop.
 - `spawnDaemon` — spawn the detached daemon process and wait for its socket,
@@ -70,7 +71,7 @@ import { stopDaemon } from '@tejika/process'
 
 const result = await stopDaemon({ app: 'my-app' })
 if (!result.stopped) {
-  // 'not-running' | 'not-owned' | 'timeout' | 'aborted' | 'error'
+  // 'not-running' | 'not-owned' | 'timeout' | 'aborted' | 'busy' | 'error'
   console.log(result.reason)
 }
 ```
@@ -117,17 +118,41 @@ peer (`EMFILE`, `ENOMEM`, …, i.e. *our* problem, not the daemon's). `isSocketL
 is true for all three non-dead verdicts, so a machine under fd pressure can
 never unlink a healthy daemon's socket.
 
-**Pidfile format change.** The pidfile used to be a bare PID integer; it is
-now a JSON `LockRecord` (`{ pid, socketPath, startedAt, ready }`), claimed
-*before* the socket is bound — that ordering is what closes the old
-split-brain boot race. The claim writes the record to a temp file and `link()`s
-it into place: like `O_EXCL` it fails with `EEXIST` when the name is taken, but
-unlike a create-then-write it never leaves an empty lockfile visible to a
-concurrent booter (who would parse nothing, conclude "not running", and reap the
-winner's fresh lock). One consequence: a lock record on disk is not proof of
-readiness. `'booting'` is a real, distinct `DaemonStatus` state (claimed, not yet
-listening) that must not be treated as `'running'`.
+**Locking moved out of the pidfile (0.3.0).** The pidfile is still JSON at the
+same path, with the same fields — it is now a `DaemonState`
+(`{ pid, socketPath, startedAt, ready }`), a *presence record* and nothing more.
+Exclusion is a separate, short-lived mutex at `<pidPath>.lock`, provided by
+[`@sozai/lock`](https://www.npmjs.com/package/@sozai/lock) and held only across
+the boot, stop and shutdown critical sections — never for the daemon's lifetime,
+so `getDaemonStatus` never blocks behind a live daemon.
 
-A pidfile written by the old code parses as `null` (not a conforming
-`LockRecord`) to the new `getDaemonStatus`, which classifies it as
-`'not-running'` — so a still-running old-format daemon is reported absent.
+| Before | After |
+|---|---|
+| `LockRecord` | `DaemonState` — same fields, exported as a type |
+| `runDaemon({ bootGraceMs })`, `getDaemonStatus({ bootGraceMs })` | gone. An unready record is `'booting'` to an observer, and provably abandoned to a mutex holder — no clock is consulted |
+| — | `runDaemon({ lockPath, lockTimeoutMs })` and `stopDaemon({ lockPath, lockTimeoutMs })`. `lockPath` defaults to `` `${pidPath}.lock` ``, so nothing needs configuring, and no new CLI flag is passed to the child |
+| — | `StopResult.reason: 'busy'` — the mutex is held by a concurrent boot or stop, so nothing was attempted |
+| — | `TimeoutInterruption` (re-exported from `@sozai/lock`) can escape `runDaemon` when the boot mutex cannot be taken within `lockTimeoutMs`. Distinct from `DaemonAlreadyRunningError`: "someone is booting or stopping and will not let go" is not "someone is already serving" |
+| `DaemonAlreadyRunningError.pid: number`, `-1` when the daemon holds the socket with no state record naming it | `pid?: number` — `undefined` there instead. `-1` is not a pid: `process.kill(-1, sig)` signals every process you may signal, so an error object carrying it hands `process.kill(err.pid, …)` a weapon |
+| — | `getLockPathFor(pidPath)` is exported. Anything that passes an explicit `pidPath` (`spawnDaemon` does, by default) can now name the mutex guarding it; `@tejika/env`'s `getLockPath(app)` only derives it from an app name |
+
+Why: the old pidfile was a mutex and a presence record at once, so every boot and
+every stop was a check-then-act guarded by the lockfile's inode. That guard does
+not hold — the kernel recycles an inode number the moment a file is unlinked, so
+a reaper could unlink the very lock a fresh daemon had just claimed on the
+recycled inode. `@sozai/lock` guards on a per-claim nonce, plus an OS boot ID so
+a pid is only trusted when it comes from this boot.
+
+`'booting'` is still a real, distinct `DaemonStatus` state (record written, socket
+not yet bound) and must not be treated as `'running'`. A daemon booted by 0.2.0 is
+still readable by 0.3.0 — the record format did not change — but it holds no boot
+mutex, so stop it before upgrading rather than relying on the overlap.
+
+`stopDaemon` never signals a `'booting'` record's pid: it removes the record and
+reports `reason: 'not-running'`. A `ready: false` record is only ever written from
+inside the mutex, so one *read* from inside the mutex was written by a process that
+no longer holds it — it is abandoned by construction, and its pid is either dead or
+recycled onto an unrelated process. (The record outlives a reboot, so this is
+ordinary: SIGKILL a daemon mid-boot, reboot, run `stop`.) `runDaemon` reclaims such a
+record on exactly the same proof. A recycled pid on a `ready: true` record is caught
+instead by the socket probe, which demotes it to `'stale'`.

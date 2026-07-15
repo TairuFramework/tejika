@@ -27,6 +27,18 @@ describe('DaemonAlreadyRunningError', () => {
     expect(err.message).toContain('4321')
     expect(err.name).toBe('DaemonAlreadyRunningError')
   })
+
+  // A foreign daemon holding the socket with no state record has no pid we can name. This
+  // used to be reported as pid `-1` — a public error object handing the caller a weapon:
+  // `process.kill(-1, sig)` signals every process the user may signal. An unknown pid is
+  // now absent, and the message says so rather than printing a number that is not one.
+  test('carries no pid when the running daemon cannot be named', () => {
+    const err = new DaemonAlreadyRunningError(undefined, '/tmp/app.sock')
+    expect(err.pid).toBeUndefined()
+    expect(err.message).not.toContain('-1')
+    expect(err.message).toContain('unknown pid')
+    expect(err.socketPath).toBe('/tmp/app.sock')
+  })
 })
 
 describe('DaemonBootError', () => {

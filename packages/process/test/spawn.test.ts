@@ -6,7 +6,7 @@ import spawn from 'nano-spawn'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { DaemonBootError } from '../src/errors.js'
 import { spawnDaemon } from '../src/spawn.js'
-import { stopDaemon } from '../src/status.js'
+import { stopDaemon } from '../src/stop.js'
 
 const APP = 'tejika-test'
 const daemonEntry = fileURLToPath(new URL('./fixtures/daemon-entry.ts', import.meta.url))

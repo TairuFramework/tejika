@@ -20,3 +20,12 @@ export function getSocketPath(app: string, name?: string): string {
 export function getPIDPath(app: string): string {
   return getAppEnvVar(app, 'PID_PATH') ?? join(getStateDir(app), `${app}.pid`)
 }
+
+/**
+ * Daemon boot mutex, beside the pidfile. Derived, never separately configurable: a
+ * `LOCK_PATH` override could resolve differently in a spawned child than its parent, and
+ * two processes on different mutexes is the split brain the mutex exists to prevent.
+ */
+export function getLockPath(app: string): string {
+  return `${getPIDPath(app)}.lock`
+}

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { acquireFileLock } from '@sozai/lock'
 import runCommand from 'nano-spawn'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+
 import { writeDaemonState } from '../src/state.js'
 import { signalTolerantly, stopDaemon } from '../src/stop.js'
 

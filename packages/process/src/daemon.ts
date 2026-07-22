@@ -11,6 +11,7 @@ import type { Server } from '@enkaku/server'
 import { SocketTransport } from '@enkaku/socket'
 import { acquireFileLock, type FileLock } from '@sozai/lock'
 import { getPIDPath, getSocketPath } from '@tejika/env'
+
 import { DaemonAlreadyRunningError } from './errors.js'
 import { isSocketLive, safeRemove } from './socket.js'
 import {

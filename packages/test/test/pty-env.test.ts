@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
+
 import { PTYDriver } from '../src/pty.js'
 
 const echo = fileURLToPath(new URL('./fixtures/env-echo.js', import.meta.url))

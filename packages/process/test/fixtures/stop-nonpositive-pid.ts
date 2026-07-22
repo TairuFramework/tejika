@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs'
+
 import { stopDaemon } from '../../src/stop.js'
 
 // A lockfile naming pid 0, handed to `stopDaemon`. Pre-fix this classified as a

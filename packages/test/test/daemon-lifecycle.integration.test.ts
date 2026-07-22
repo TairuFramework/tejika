@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getDaemonStatus, stopDaemon } from '@tejika/process'
 import { expect, test } from 'vitest'
+
 import { waitForDaemonRunning, waitForDaemonStopped } from '../src/daemon.js'
 import { createTestProfile } from '../src/profile.js'
 

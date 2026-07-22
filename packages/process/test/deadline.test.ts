@@ -1,5 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { describe, expect, test } from 'vitest'
+
 import { createDeadline } from '../src/deadline.js'
 
 // There is no `expired()` on a Deadline, on purpose: it folded "the caller

@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import { afterEach, describe, expect, test } from 'vitest'
+
 import { DEFAULT_LOG_LEVELS, withLogLevel, withPort, withSocketPath } from '../src/options.js'
 
 afterEach(() => {

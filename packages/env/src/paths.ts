@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import envPaths from 'env-paths'
+
 import { getAppEnvVar } from './env-var.js'
 
 export function getDataDir(app: string): string {

@@ -31,6 +31,7 @@ function parsePortArg(value: string): number {
   try {
     return parsePort(value)
   } catch {
+    // biome-ignore lint/style/useErrorCause: no cause in CommanderError
     throw new InvalidArgumentError('Expected an integer between 1 and 65535.')
   }
 }

@@ -2,6 +2,7 @@ import { rmSync } from 'node:fs'
 import type { Socket } from 'node:net'
 import { setTimeout as delay } from 'node:timers/promises'
 import { type ConnectSocketOptions, connectSocket } from '@enkaku/socket'
+
 import { createDeadline, type Deadline } from './deadline.js'
 
 /**
@@ -104,7 +105,9 @@ export async function waitForSocket(
       // with an AbortError either way. timedOut() reads the timeout signal directly
       // — exact at the tick — so budget exhaustion becomes the timeout Error while a
       // caller cancellation keeps its own AbortError.
-      if (deadline.timedOut()) throw new Error(`Timed out waiting for socket ${socketPath}`)
+      if (deadline.timedOut()) {
+        throw new Error(`Timed out waiting for socket ${socketPath}`, { cause: err })
+      }
       throw err
     }
   }

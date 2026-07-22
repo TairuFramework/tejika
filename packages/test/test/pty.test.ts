@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
+
 import { PTYDriver } from '../src/pty.js'
 
 const fixture = fileURLToPath(new URL('./fixtures/pty-app.js', import.meta.url))

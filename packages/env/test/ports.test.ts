@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
+
 import { getPort, parsePort, resolvePort } from '../src/ports.js'
 
 afterEach(() => {
@@ -14,17 +15,12 @@ describe('parsePort', () => {
   test('accepts a padded value', () => {
     expect(parsePort(' 8080 ')).toBe(8080)
   })
-  test.each([
-    '80abc',
-    '80.5',
-    '0x50',
-    '-1',
-    '',
-    '   ',
-    'abc',
-  ])('rejects the malformed value %j', (value) => {
-    expect(() => parsePort(value)).toThrow(/not a valid port number|Invalid port number/)
-  })
+  test.each(['80abc', '80.5', '0x50', '-1', '', '   ', 'abc'])(
+    'rejects the malformed value %j',
+    (value) => {
+      expect(() => parsePort(value)).toThrow(/not a valid port number|Invalid port number/)
+    },
+  )
   test.each(['0', '70000', '65536'])('rejects the out-of-range value %j', (value) => {
     expect(() => parsePort(value)).toThrow(/Invalid port number/)
   })
@@ -65,18 +61,13 @@ describe('getPort', () => {
     await new Promise((resolve) => server.close(resolve))
     await expect(getPort('myapp', { default: freePort, host: '127.0.0.1' })).resolves.toBe(freePort)
   })
-  test.each([
-    'abc',
-    '80abc',
-    '80.5',
-    '0x50',
-    '0',
-    '-1',
-    '70000',
-  ])('throws on the invalid override %j', async (value) => {
-    process.env.MYAPP_PORT = value
-    await expect(getPort('myapp')).rejects.toThrow(/MYAPP_PORT is not a valid port number/)
-  })
+  test.each(['abc', '80abc', '80.5', '0x50', '0', '-1', '70000'])(
+    'throws on the invalid override %j',
+    async (value) => {
+      process.env.MYAPP_PORT = value
+      await expect(getPort('myapp')).rejects.toThrow(/MYAPP_PORT is not a valid port number/)
+    },
+  )
   test('throws on an invalid default', async () => {
     await expect(getPort('myapp', { default: 0 })).rejects.toThrow(/Invalid port number/)
   })

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import spawn from 'nano-spawn'
 import { afterEach, beforeEach, expect, test } from 'vitest'
+
 import { DaemonBootError } from '../src/errors.js'
 import { spawnDaemon } from '../src/spawn.js'
 import { stopDaemon } from '../src/stop.js'

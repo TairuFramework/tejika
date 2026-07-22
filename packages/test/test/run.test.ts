@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+
 import { runCLI } from '../src/run.js'
 
 describe('runCLI', () => {

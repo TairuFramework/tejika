@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import type { Client } from '@enkaku/client'
 import type { ProtocolDefinition } from '@enkaku/protocol'
 import { getSocketPath } from '@tejika/env'
+
 import { createDaemonClient } from './client.js'
 import { createDeadline, type Deadline } from './deadline.js'
 import { spawnDaemon } from './spawn.js'
@@ -88,7 +89,9 @@ export async function connectWithRetry<Protocol extends ProtocolDefinition>(
       // here falls through to the sleep below, where delay() rejects immediately
       // against the already-aborted signal and the catch rethrows it untouched.
       if (deadline.timedOut()) {
-        throw new Error(`ensureDaemon timed out connecting to ${socketPath} (budget exhausted)`)
+        throw new Error(`ensureDaemon timed out connecting to ${socketPath} (budget exhausted)`, {
+          cause: err,
+        })
       }
       try {
         await delay(Math.min(intervalMs, deadline.remaining()), undefined, {
@@ -99,7 +102,9 @@ export async function connectWithRetry<Protocol extends ProtocolDefinition>(
         // directly — exact at the tick — so budget exhaustion becomes the
         // timeout Error while a caller cancellation keeps its own AbortError.
         if (deadline.timedOut()) {
-          throw new Error(`ensureDaemon timed out connecting to ${socketPath} (budget exhausted)`)
+          throw new Error(`ensureDaemon timed out connecting to ${socketPath} (budget exhausted)`, {
+            cause: sleepErr,
+          })
         }
         throw sleepErr
       }

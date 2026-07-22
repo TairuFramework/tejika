@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type ConnectSocketOptions, connectSocket } from '@enkaku/socket'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+
 import { createDeadline } from '../src/deadline.js'
 import { type ConnectSocket, isSocketLive, probeSocket, waitForSocket } from '../src/socket.js'
 

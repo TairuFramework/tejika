@@ -3,6 +3,7 @@
 // distinct from `DaemonAlreadyRunningError` — "someone is booting or stopping and will not
 // let go" is not "someone is already serving".
 export { TimeoutInterruption } from '@sozai/lock'
+
 export {
   type CreateDaemonClientOptions,
   createDaemonClient,

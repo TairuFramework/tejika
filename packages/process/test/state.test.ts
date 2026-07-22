@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLockPath, getPIDPath } from '@tejika/env'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+
 import {
   type DaemonState,
   getLockPathFor,

@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { getDaemonStatus, stopDaemon } from '@tejika/process'
 import { expect, test } from 'vitest'
+
 import { waitForDaemonStopped } from '../src/daemon.js'
 import { poll } from '../src/poll.js'
 import { createTestProfile } from '../src/profile.js'
@@ -34,15 +35,15 @@ const persistentClientEntry = fileURLToPath(
 test('two separate processes cold-start the same daemon concurrently, both get a working client', {
   timeout: 60_000,
 }, async () => {
-  const APP = 'tejika-e2e'
-  await using profile = createTestProfile(APP, {
+  const App = 'tejika-e2e'
+  await using profile = createTestProfile(App, {
     onDispose: async ({ dir }) => {
-      const pidPath = join(dir, `${APP}.pid`)
-      await stopDaemon({ app: APP, pidPath }).catch(() => {})
+      const pidPath = join(dir, `${App}.pid`)
+      await stopDaemon({ app: App, pidPath }).catch(() => {})
       await waitForDaemonStopped({ pidPath, timeoutMs: 3_000 })
     },
   })
-  const pidPath = join(profile.dir, `${APP}.pid`)
+  const pidPath = join(profile.dir, `${App}.pid`)
 
   const [a, b] = await Promise.all([
     runCLI([ensureClientEntry], { env: profile.env }),
@@ -57,7 +58,7 @@ test('two separate processes cold-start the same daemon concurrently, both get a
   // Exactly one daemon ends up running: the O_EXCL lock admits only one
   // winner, so a single lockfile naming a live, ready daemon is what "one
   // daemon" looks like from the outside.
-  const status = await getDaemonStatus({ app: APP, pidPath })
+  const status = await getDaemonStatus({ app: App, pidPath })
   expect(status.state).toBe('running')
 })
 
@@ -74,11 +75,11 @@ test('two separate processes cold-start the same daemon concurrently, both get a
 test('a boot crash fails fast and does not pin the process alive', {
   timeout: 25_000,
 }, async () => {
-  const APP = 'tejika-e2e-crash'
-  await using profile = createTestProfile(APP, {
+  const App = 'tejika-e2e-crash'
+  await using profile = createTestProfile(App, {
     onDispose: async ({ dir }) => {
-      const pidPath = join(dir, `${APP}.pid`)
-      await stopDaemon({ app: APP, pidPath }).catch(() => {})
+      const pidPath = join(dir, `${App}.pid`)
+      await stopDaemon({ app: App, pidPath }).catch(() => {})
     },
   })
 
@@ -117,14 +118,14 @@ async function waitForLine(
 test('a client survives its daemon being SIGKILLed and revived by a fresh process', {
   timeout: 90_000,
 }, async () => {
-  const APP = 'tejika-e2e'
-  await using profile = createTestProfile(APP, {
+  const App = 'tejika-e2e'
+  await using profile = createTestProfile(App, {
     onDispose: async ({ dir }) => {
-      const pidPath = join(dir, `${APP}.pid`)
-      await stopDaemon({ app: APP, pidPath }).catch(() => {})
+      const pidPath = join(dir, `${App}.pid`)
+      await stopDaemon({ app: App, pidPath }).catch(() => {})
     },
   })
-  const pidPath = join(profile.dir, `${APP}.pid`)
+  const pidPath = join(profile.dir, `${App}.pid`)
 
   const client = spawn('node', [persistentClientEntry], { env: profile.env })
   const lines: Array<string> = []

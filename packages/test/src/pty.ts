@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { type IPty, spawn } from 'node-pty'
 import stripAnsi from 'strip-ansi'
+
 import { poll } from './poll.js'
 
 export type PTYDriverOptions = {

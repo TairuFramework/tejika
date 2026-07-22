@@ -3,6 +3,7 @@
 // promise settles. A boot crash must not leave the abandoned socket wait polling
 // on ref'd timers for the rest of the budget.
 import { fileURLToPath } from 'node:url'
+
 import { spawnDaemon } from '../../src/spawn.js'
 
 const [socketPath, pidPath, logPath] = process.argv.slice(2) as [string, string, string]

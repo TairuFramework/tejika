@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+
 import { DaemonBootError } from '../src/errors.js'
 import { spawnDaemon } from '../src/spawn.js'
 

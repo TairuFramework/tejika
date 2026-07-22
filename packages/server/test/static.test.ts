@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+
 import { injectToken, serveStaticSPA } from '../src/static.js'
 
 describe('injectToken', () => {

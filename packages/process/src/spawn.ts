@@ -2,6 +2,7 @@ import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { getDataDir, getPIDPath, getSocketPath } from '@tejika/env'
 import spawn from 'nano-spawn'
+
 import { createDeadline, type Deadline } from './deadline.js'
 import { DaemonBootError } from './errors.js'
 import { waitForSocket } from './socket.js'

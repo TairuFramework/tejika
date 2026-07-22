@@ -4,12 +4,12 @@ packages:
 nodeLinker: hoisted
 
 catalog:
-  '@enkaku/client': ^0.19.0
-  '@enkaku/http-serve': ^0.19.0
-  '@enkaku/protocol': ^0.19.0
-  '@enkaku/server': ^0.19.0
-  '@enkaku/socket': ^0.19.1
-  '@hono/node-server': ^2.0.8
+  '@enkaku/client': ^0.20.0
+  '@enkaku/http-serve': ^0.20.0
+  '@enkaku/protocol': ^0.20.0
+  '@enkaku/server': ^0.20.0
+  '@enkaku/socket': ^0.20.0
+  '@hono/node-server': ^2.0.11
   '@inkjs/ui': ^2.0.0
   '@sozai/lock': ^0.1.0
   '@types/node': ^26.1.1
@@ -17,8 +17,8 @@ catalog:
   commander: ^15.0.0
   env-paths: ^4.0.0
   get-port: ^7.2.0
-  hono: ^4.12.29
-  ink: ^7.1.0
+  hono: ^4.12.31
+  ink: ^7.1.1
   ink-testing-library: ^4.0.0
   nano-spawn: ^2.1.0
   node-pty: ^1.1.0

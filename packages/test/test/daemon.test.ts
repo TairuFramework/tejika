@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { DaemonState } from '@tejika/process'
 import { describe, expect, test } from 'vitest'
+
 import { waitForDaemonRunning, waitForDaemonStopped } from '../src/daemon.js'
 
 let counter = 0

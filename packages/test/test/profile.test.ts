@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
+
 import { createTestProfile } from '../src/profile.js'
 
 describe('createTestProfile', () => {

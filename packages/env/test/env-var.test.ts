@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+
 import { appEnvVar } from '../src/env-var.js'
 
 describe('appEnvVar', () => {

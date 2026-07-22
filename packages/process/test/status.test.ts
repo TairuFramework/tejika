@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { acquireFileLock } from '@sozai/lock'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+
 import type { SocketProbe } from '../src/socket.js'
 import { type DaemonState, writeDaemonState } from '../src/state.js'
 import { classifyState, getDaemonStatus, type StatusDeps } from '../src/status.js'

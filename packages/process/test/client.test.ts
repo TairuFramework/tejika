@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { connectSocket } from '@enkaku/socket'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+
 import { connectWithTimeout, createDaemonTransport, nextBackoff } from '../src/client.js'
 import type { ConnectSocket } from '../src/socket.js'
 import type { PingProtocol } from './fixtures/protocol.js'

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+
 import { DaemonAlreadyRunningError, DaemonBootError } from '../src/errors.js'
 
 // `code` moved from a TS `readonly` field (a repo guardrail violation) to a

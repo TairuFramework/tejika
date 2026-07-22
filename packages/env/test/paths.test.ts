@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
+
 import { getDataDir, getLockPath, getPIDPath, getSocketPath, getStateDir } from '../src/paths.js'
 
 afterEach(() => {

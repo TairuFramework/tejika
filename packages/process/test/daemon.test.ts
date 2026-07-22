@@ -8,6 +8,7 @@ import type { ClientMessage, ServerMessage, ServerTransportOf } from '@enkaku/pr
 import { serve } from '@enkaku/server'
 import { SocketTransport } from '@enkaku/socket'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+
 import { type DaemonHandle, type RunDaemonOptions, runDaemon } from '../src/daemon.js'
 import { DaemonAlreadyRunningError } from '../src/errors.js'
 import { isSocketLive } from '../src/socket.js'

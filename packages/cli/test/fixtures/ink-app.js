@@ -1,5 +1,6 @@
 import { Text, useApp, useInput } from 'ink'
 import { createElement, useState } from 'react'
+
 import { runInk } from '../../lib/index.js'
 
 function App() {

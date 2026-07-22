@@ -9,6 +9,7 @@ import type {
 } from '@enkaku/protocol'
 import { connectSocket, SocketTransport } from '@enkaku/socket'
 import { getSocketPath } from '@tejika/env'
+
 import type { ConnectSocket } from './socket.js'
 
 /** Reconnect backoff bounds: start fast, cap at a few seconds. */

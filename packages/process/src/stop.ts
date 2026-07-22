@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { TimeoutInterruption, withFileLock } from '@sozai/lock'
 import { getPIDPath } from '@tejika/env'
+
 import { createDeadline, type Deadline } from './deadline.js'
 import { getLockPathFor, readDaemonState, removeDaemonState } from './state.js'
 import { classifyState } from './status.js'

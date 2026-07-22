@@ -1,4 +1,5 @@
 import { getDaemonStatus } from '@tejika/process'
+
 import { poll } from './poll.js'
 
 export type WaitForDaemonOptions = {

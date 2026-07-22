@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util'
 import { serve } from '@enkaku/server'
+
 import { runDaemon } from '../../src/index.js'
 
 // Run with `node --import tsx` so the spawned process executes this TypeScript

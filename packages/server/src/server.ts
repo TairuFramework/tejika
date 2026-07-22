@@ -5,6 +5,7 @@ import { type ServerType, serve } from '@hono/node-server'
 import { getPort } from '@tejika/env'
 import { type Context, Hono, type Next } from 'hono'
 import { cors } from 'hono/cors'
+
 import { buildAllowedHosts, verifyLoopbackRequest } from './auth.js'
 
 export type AuthConfig = { mode: 'custom'; verify: (req: Request) => boolean }

@@ -1,5 +1,6 @@
 import { render } from 'ink-testing-library'
 import { describe, expect, test } from 'vitest'
+
 import { ConfirmCard } from '../src/ConfirmCard.js'
 import { Footer } from '../src/Footer.js'
 import { IconLine } from '../src/IconLine.js'

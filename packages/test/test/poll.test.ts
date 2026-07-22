@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+
 import { poll } from '../src/poll.js'
 
 describe('poll', () => {

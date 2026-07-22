@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+
 import { buildAllowedHosts, verifyLoopbackRequest } from '../src/auth.js'
 
 const ctx = {

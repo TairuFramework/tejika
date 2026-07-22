@@ -1,4 +1,5 @@
 import { getPIDPath } from '@tejika/env'
+
 import { probeSocket, type SocketProbe } from './socket.js'
 import { type DaemonState, readDaemonState } from './state.js'
 

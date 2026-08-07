@@ -12,9 +12,11 @@ apps that compose these packages.
   (`getDataDir`, `getStateDir`, `getSocketPath`, `getPIDPath`, `getPort`,
   `parsePort`, `resolvePort`). The foundational concern with no `@tejika` deps.
 - **`@tejika/log`** — local log files: `createFileSink` (a rotating `@logtape/file`
-  sink under `getLogDir(app)`), `createFileLogConfig`, and `configureFileLogging`.
-  The filesystem half of logging, kept out of `@sozai/log` so that package stays
-  browser-safe.
+  sink under `getLogDir(app)`) and `createFileLogConfig` (a whole logtape `Config`
+  built from a list of file targets). Both are pure builders — this package never
+  calls logtape's `setup()`/`configureSync()` itself; the host passes the result to
+  `@sozai/log`'s (or its own) `setup()`. `@logtape/logtape` is a peer dependency, not
+  a regular one, so the host controls the single logtape instance its process runs.
 - **`@tejika/process`** — local daemon lifecycle: detached spawn, foreground
   bootstrap, pidfile/split-brain guard, and Enkaku client management with
   reconnect backoff.
@@ -33,7 +35,7 @@ apps that compose these packages.
 
 ```
 @tejika/env       no @tejika deps (foundational)
-@tejika/log       env + @logtape/file + @logtape/logtape + @sozai/log
+@tejika/log       env + @logtape/file (@logtape/logtape peer, no @sozai/log)
 @tejika/process   env + @enkaku/{socket,client,server} + nano-spawn
 @tejika/server    env + @enkaku/http-serve + hono + @hono/node-server + get-port
 @tejika/cli       commander, ink, react; env (default option values)

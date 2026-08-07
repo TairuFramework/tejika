@@ -41,14 +41,31 @@ A new package rather than an addition to `@tejika/env`. `@tejika/env` is the fou
 package depends on, and its dependencies are two small leaf libraries; putting `@logtape/file` there
 would push a logging stack onto `@tejika/server` and `@tejika/cli`, which do not want one.
 
-Dependencies: `@tejika/env` (workspace), `@logtape/file` (`^2.3.0`), `@logtape/logtape` (its peer,
-and the source of the formatters and the `Sink`/`Config`/`LogLevel` types), `@sozai/log` (for
-`setup` and `reset`).
+Dependencies: `@tejika/env` (workspace), `@logtape/file` (`^2.3.0`, a regular dependency), and
+`@logtape/logtape` (`^2.3.0`, a peer dependency — the source of the `getConsoleSink` function and
+the `Sink`/`Config`/`LogLevel` types). No dependency on `@sozai/log`: this package never calls
+`setup()`/`configureSync()` itself, so it has nothing to gain from it and nothing to import from
+it — `getConsoleSink` and the types it needs come from `@logtape/logtape` directly, which
+`@sozai/log` was only re-exporting unchanged.
 
 Why here rather than `@sozai/log`: `@sozai/log` runs in browsers as well as Node and must stay
 environment-agnostic. `@tejika/*` is already filesystem- and process-bound — it owns pidfiles,
 sockets, lockfiles, and platform paths — so a filesystem sink belongs beside the path helpers it
 uses. `@sozai/log` provides the logger and the namespace; this package provides the place on disk.
+
+### Why `@logtape/logtape` is a peer dependency
+
+Logtape's configuration is process-global: `configureSync`/`setup()` sets it once for the whole
+process, and a second `@logtape/logtape` module instance in the tree means a second, independent
+piece of that global state — sinks configured through one instance are invisible to code that
+imported the other. An app must run exactly one logtape instance, so every package that touches
+logtape's API declares it as a peer and lets the host's package manager collapse everyone onto one
+copy, rather than each package pinning (and thereby risking multiplying) its own.
+
+`@logtape/file` stays a regular dependency, not a peer: it holds no global state — it only builds
+`Sink` values — so there is no instance-multiplication risk to guard against by forcing it onto the
+host. Making it a peer would also mean every host has to know `@logtape/file`'s own option names
+just to satisfy the peer requirement, which defeats the point of this package hiding them.
 
 ### 3.1 `createFileSink`
 
@@ -81,7 +98,7 @@ Behaviour:
   whose records must survive the process opts in — an unflushed record is a lost record.
 - Rotation delegates to `getTimeRotatingFileSink`; `rotate: false` uses `getFileSink`.
 
-### 3.2 `createFileLogConfig` and `configureFileLogging`
+### 3.2 `createFileLogConfig`
 
 ```ts
 export type FileLogTarget = Omit<FileSinkOptions, 'app'> & {
@@ -96,15 +113,16 @@ export type FileLogConfigOptions = {
 }
 
 export function createFileLogConfig(options: FileLogConfigOptions): Config<string, string>
-
-export function configureFileLogging(options: FileLogConfigOptions & { reset?: boolean }): void
 ```
 
-`createFileLogConfig` builds the whole `Config`; `configureFileLogging` is the thin wrapper that
-passes it to `@sozai/log`'s `setup()`. The split exists because `setup()` takes one whole `Config`
-and is first-call-wins, so two helpers cannot each contribute a sink. A host with a layout this
-builder does not cover builds its own `Config` and calls `setup()` directly, and the builder itself
-stays testable without touching logtape's process-global state.
+No `configureFileLogging` wrapper: `@tejika/log` does not call `setup()`/`configureSync()` at all,
+because that would mean touching logtape's process-global configuration from a package that does
+not own the app's logging lifecycle. `createFileLogConfig` is a pure builder — the host passes its
+result to `@sozai/log`'s (or its own) `setup()` itself. That call is genuinely one line
+(`setup(createFileLogConfig({ ... }))`), so the wrapper was saving little while adding a second
+place that knew about `setup()`'s first-call-wins behaviour. A host with a layout this builder does
+not cover builds its own `Config` the same way and calls `setup()` on it identically; the builder
+itself stays testable without touching logtape's process-global state.
 
 Semantics:
 
@@ -119,18 +137,27 @@ Semantics:
   `{ category: [], lowestLevel: level ?? 'error', sinks: ['console'] }`, mirroring
   `@sozai/log`'s `getDefaultConfig`. Logtape counts a `category: []` entry as configuring the meta
   logger, so no separate suppression entry is needed in this case.
-- `reset: true` calls `@sozai/log`'s `reset()` before `setup()`. Needed because `setup()` returns
-  early when logging is already configured and swallows a `reset` flag set inside the config —
-  Sakui's `configureMissLogging` hits exactly this.
+
+There is no `reset` option on the builder: `createFileLogConfig` never calls `setup()`, so there is
+nothing here to reset. `@sozai/log`'s `setup()` returns early when logging is already configured and
+DISCARDS the config it was handed — a `reset` flag placed inside that config would never reach
+`configureSync` and would be silently swallowed — so a host that means to reconfigure calls
+`@sozai/log`'s `reset()` itself, before `setup()`. `createFileLogConfig`'s doc comment carries this
+warning for exactly that caller.
 
 ### 3.3 What Sakui's host code becomes
 
 ```ts
-configureFileLogging({
-  app: 'sakui',
-  files: [{ name: 'miss', category: ['sakui', 'runtime', 'miss'], format: 'jsonLines', sync: true }],
-  reset: true,
-})
+import { reset, setup } from '@sozai/log'
+import { createFileLogConfig } from '@tejika/log'
+
+reset()
+setup(
+  createFileLogConfig({
+    app: 'sakui',
+    files: [{ name: 'miss', category: ['sakui', 'runtime', 'miss'], format: 'jsonLines', sync: true }],
+  }),
+)
 ```
 
 replacing the `mkdirSync` + `getTimeRotatingFileSink` + hand-built `Config` in

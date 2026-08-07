@@ -1,6 +1,6 @@
 import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { getDataDir, getPIDPath, getSocketPath } from '@tejika/env'
+import { getLogDir, getPIDPath, getSocketPath } from '@tejika/env'
 import spawn from 'nano-spawn'
 
 import { createDeadline, type Deadline } from './deadline.js'
@@ -61,7 +61,7 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
   // had no path to read) and every losing child became a `DaemonBootError`. Explicit also avoids
   // a parent/child divergence: env's PID_PATH override could resolve differently in the child.
   const pidPath = opts.pidPath ?? getPIDPath(opts.app)
-  const logPath = opts.logPath ?? join(getDataDir(opts.app), 'daemon.log')
+  const logPath = opts.logPath ?? join(getLogDir(opts.app), 'daemon.log')
   const deadline = opts.deadline ?? createDeadline(opts.timeoutMs ?? 3000, opts.signal)
 
   mkdirSync(dirname(logPath), { recursive: true })

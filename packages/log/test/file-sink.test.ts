@@ -21,8 +21,13 @@ function record(message: string): LogRecord {
   }
 }
 
+// `getTimeRotatingFileSink` derives every filename from the system clock at
+// construction and at rotation, never from `record.timestamp` — so the clock is
+// pinned here, once, rather than relying on the calendar or the record's date.
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'tejika-log-'))
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-08-07T14:30:00Z'))
 })
 
 afterEach(() => {
@@ -37,21 +42,13 @@ test('creates the log directory when missing', () => {
   expect(existsSync(target)).toBe(true)
 })
 
-// `getTimeRotatingFileSink` derives the filename from the system clock at
-// construction and at rotation, not from `record.timestamp` — so the test pins
-// the clock rather than relying on the record's date.
 test('names a daily text file after the record date', () => {
-  vi.useFakeTimers()
-  vi.setSystemTime(new Date('2026-08-07T14:30:00Z'))
   const sink = createFileSink({ app: APP, name: 'miss', dir, sync: true })
   sink(record('hello'))
   expect(readdirSync(dir)).toEqual(['miss-2026-08-07.log'])
 })
 
-// See the comment above: filenames come from the pinned system clock, not the record.
 test('names an hourly file down to the hour', () => {
-  vi.useFakeTimers()
-  vi.setSystemTime(new Date('2026-08-07T14:30:00Z'))
   const sink = createFileSink({ app: APP, name: 'miss', dir, rotate: 'hourly', sync: true })
   sink(record('hello'))
   expect(readdirSync(dir)).toEqual(['miss-2026-08-07T14.log'])

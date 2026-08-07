@@ -184,8 +184,10 @@ empty-or-whitespace override falling back to the default.
 - every file logger entry carries `parentSinks: 'override'`;
 - `console: false` produces the meta-suppression entry, `console: true` produces the root entry
   instead;
-- `configureFileLogging` end to end: log a record, read it back off disk. `reset()` runs in
-  `afterEach`, since logtape's configuration is process-global.
+- a rejected target opens no sink, since validation runs before construction.
+
+Building a config opens files, so these tests point their targets at an `mkdtemp` directory. No test
+here configures logtape: the builder is pure, and `setup()` belongs to the host.
 
 `packages/process`: no existing test asserts the default log path — `controller.test.ts` and
 `mutex.test.ts` both pass `logPath` explicitly. Add one that omits it, with `<APP>_LOG_DIR` pointed
@@ -193,8 +195,8 @@ at a temp directory, asserting the daemon's output lands at `<logDir>/daemon.log
 
 ## 5. Wiring and docs
 
-- `pnpm-workspace.yaml` catalog gains `@logtape/file` and `@logtape/logtape` at `^2.3.0`, and
-  `@sozai/log` at `^0.3.0`. `@sozai/*` is already in `minimumReleaseAgeExclude`.
+- `pnpm-workspace.yaml` catalog gains `@logtape/file` and `@logtape/logtape` at `^2.3.0`. No
+  `@sozai/log` entry: this package does not depend on it.
 - `packages/log/` mirrors `packages/env/`'s `package.json` scripts, `tsconfig.json`, and
   `tsconfig.test.json`.
 - `@tejika/log` ships at `0.4.0`, matching the repo's lockstep versioning rather than starting at

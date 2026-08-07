@@ -11,6 +11,15 @@ export function getStateDir(app: string): string {
   return getAppEnvVar(app, 'STATE_DIR') ?? envPaths(app, { suffix: '' }).config
 }
 
+/**
+ * Log directory: the platform's own log location, not a subdirectory of the data dir.
+ * `~/Library/Logs/<app>` on macOS, `~/.local/state/<app>/log` on Linux,
+ * `AppData\Local\<app>\Log` on Windows.
+ */
+export function getLogDir(app: string): string {
+  return getAppEnvVar(app, 'LOG_DIR') ?? envPaths(app, { suffix: '' }).log
+}
+
 export function getSocketPath(app: string, name?: string): string {
   const override = getAppEnvVar(app, 'SOCKET_PATH')
   if (override != null && name == null) return override

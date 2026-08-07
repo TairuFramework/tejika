@@ -20,7 +20,7 @@ Exported from `packages/env/src/paths.ts` and `packages/env/src/index.ts`, follo
 as `getDataDir` and `getStateDir`: an `<APP>_LOG_DIR` override first, a platform default otherwise.
 
 The default is the platform log location — `~/Library/Logs/<app>` on macOS,
-`~/.local/state/<app>/log` on Linux, `AppData\Local\<app>\Log` on Windows — rather than Sakui's
+`$XDG_STATE_HOME/<app>` (`~/.local/state/<app>`) on Linux, `AppData\Local\<app>\Log` on Windows — rather than Sakui's
 invented `<dataDir>/logs`. Logs are the one thing every platform already has an opinion about, and
 `env-paths` already exposes `.log`, so `@tejika/env` gains no new dependency.
 

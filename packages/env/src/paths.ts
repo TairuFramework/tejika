@@ -13,7 +13,7 @@ export function getStateDir(app: string): string {
 
 /**
  * Log directory: the platform's own log location, not a subdirectory of the data dir.
- * `~/Library/Logs/<app>` on macOS, `~/.local/state/<app>/log` on Linux,
+ * `~/Library/Logs/<app>` on macOS, `$XDG_STATE_HOME/<app>` (`~/.local/state/<app>`) on Linux,
  * `AppData\Local\<app>\Log` on Windows.
  */
 export function getLogDir(app: string): string {

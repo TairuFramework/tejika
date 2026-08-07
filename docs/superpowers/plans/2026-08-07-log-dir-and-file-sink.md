@@ -98,7 +98,7 @@ In `packages/env/src/paths.ts`, add after `getStateDir`:
 ```ts
 /**
  * Log directory: the platform's own log location, not a subdirectory of the data dir.
- * `~/Library/Logs/<app>` on macOS, `~/.local/state/<app>/log` on Linux,
+ * `~/Library/Logs/<app>` on macOS, `$XDG_STATE_HOME/<app>` (`~/.local/state/<app>`) on Linux,
  * `AppData\Local\<app>\Log` on Windows.
  */
 export function getLogDir(app: string): string {
@@ -471,10 +471,31 @@ export type FileSinkOptions = {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/** `2026-08-07` daily, `2026-08-07T14` hourly — sortable, and parseable back for retention. */
+const STAMP_RE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}))?$/
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+/**
+ * `2026-08-07` daily, `2026-08-07T14` hourly — sortable, and parseable back for retention.
+ *
+ * Built from LOCAL components, matching logtape: its `getRotationKey` decides when to rotate
+ * from `getFullYear`/`getMonth`/`getDate`/`getHours`, so a UTC stamp disagrees everywhere
+ * outside UTC — the first rotation would reopen the same filename, silently letting one file
+ * span two local days, and every later file would carry the wrong day.
+ */
 function stampDate(date: Date, rotate: 'daily' | 'hourly'): string {
-  const iso = date.toISOString()
-  return rotate === 'daily' ? iso.slice(0, 10) : iso.slice(0, 13)
+  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  return rotate === 'daily' ? day : `${day}T${pad(date.getHours())}`
+}
+
+/** The exact inverse of {@link stampDate}, or `null` for anything it did not write. */
+function parseStamp(stamp: string): Date | null {
+  const match = STAMP_RE.exec(stamp)
+  if (match == null) return null
+  const [, year, month, day, hour] = match
+  return new Date(Number(year), Number(month) - 1, Number(day), hour == null ? 0 : Number(hour))
 }
 
 /**
@@ -517,9 +538,7 @@ export function createFileSink(options: FileSinkOptions): Sink {
       const prefix = `${name}-`
       const suffix = `.${extension}`
       if (!filename.startsWith(prefix) || !filename.endsWith(suffix)) return null
-      const stamp = filename.slice(prefix.length, filename.length - suffix.length)
-      const date = new Date(rotate === 'daily' ? `${stamp}T00:00:00Z` : `${stamp}:00:00Z`)
-      return Number.isNaN(date.getTime()) ? null : date
+      return parseStamp(filename.slice(prefix.length, filename.length - suffix.length))
     },
     maxAgeMs: retentionDays * DAY_MS,
     formatter,
@@ -978,7 +997,7 @@ git commit -m "feat(log): add configureFileLogging"
 **Files:**
 - Modify: `AGENTS.md` (package overview block)
 - Modify: `docs/agents/architecture.md` (packages list and dependency graph)
-- Move: `docs/agents/plans/next/2026-08-07-sakui-request-log-dir-and-file-sink.md` → `docs/agents/plans/completed/`
+- Move: `docs/agents/plans/next/2026-08-07-sakui-request-log-dir-and-file-sink.md` → `docs/agents/plans/completed/2026-08-07-sakui-request-log-dir-and-file-sink.complete.md`
 
 **Interfaces:**
 - Consumes: everything from Tasks 1–5. Produces no code.
@@ -1033,8 +1052,12 @@ Sakui migrates in its own repo once these versions publish.
 Then move it:
 
 ```bash
-git mv docs/agents/plans/next/2026-08-07-sakui-request-log-dir-and-file-sink.md docs/agents/plans/completed/
+git mv docs/agents/plans/next/2026-08-07-sakui-request-log-dir-and-file-sink.md \
+  docs/agents/plans/completed/2026-08-07-sakui-request-log-dir-and-file-sink.complete.md
 ```
+
+The `.complete.md` suffix is not optional: every file in `docs/agents/plans/completed/`
+carries a `.complete.md` or `.partial.md` suffix.
 
 - [ ] **Step 4: Verify the whole repo**
 

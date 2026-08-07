@@ -345,7 +345,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { LogRecord } from '@logtape/logtape'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { createFileSink } from '../src/file-sink.js'
 
@@ -366,9 +366,11 @@ function record(message: string): LogRecord {
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'tejika-log-'))
+  vi.useFakeTimers()
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -379,13 +381,18 @@ test('creates the log directory when missing', () => {
   expect(existsSync(target)).toBe(true)
 })
 
-test('names a daily text file after the record date', () => {
+// `getTimeRotatingFileSink` takes its filename from the system clock at construction
+// and at each rotation check — never from `record.timestamp`. So these two pin the
+// clock instead of relying on the record's date.
+test('names a daily text file after the current date', () => {
+  vi.setSystemTime(new Date('2026-08-07T14:30:00Z'))
   const sink = createFileSink({ app: APP, name: 'miss', dir, sync: true })
   sink(record('hello'))
   expect(readdirSync(dir)).toEqual(['miss-2026-08-07.log'])
 })
 
 test('names an hourly file down to the hour', () => {
+  vi.setSystemTime(new Date('2026-08-07T14:30:00Z'))
   const sink = createFileSink({ app: APP, name: 'miss', dir, rotate: 'hourly', sync: true })
   sink(record('hello'))
   expect(readdirSync(dir)).toEqual(['miss-2026-08-07T14.log'])

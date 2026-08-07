@@ -1,4 +1,4 @@
-import { reset, setup } from '@sozai/log'
+import { isSetup, reset, setup } from '@sozai/log'
 
 import { createFileLogConfig, type FileLogConfigOptions } from './config.js'
 
@@ -16,5 +16,8 @@ export type ConfigureFileLoggingOptions = FileLogConfigOptions & {
  */
 export function configureFileLogging(options: ConfigureFileLoggingOptions): void {
   if (options.reset) reset()
+  // setup() is first-call-wins and DISCARDS the config it is handed. Building one anyway
+  // would create each target's directory and open a descriptor for nothing.
+  else if (isSetup()) return
   setup(createFileLogConfig(options))
 }

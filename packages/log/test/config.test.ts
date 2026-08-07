@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, test } from 'vitest'
@@ -47,6 +47,70 @@ test('rejects a file target named console alongside the console sink', () => {
       console: true,
     }),
   ).toThrow(/reserved log file name: console/i)
+})
+
+// Only the console SINK reserves the key, so with the console off the name is free.
+test('allows a file target named console when the console is off', () => {
+  const config = createFileLogConfig({
+    app: APP,
+    files: [{ name: 'console', category: [APP, 'one'], dir }],
+  })
+  expect(Object.keys(config.sinks)).toEqual(['console'])
+})
+
+// Object.prototype keys must not read as an already-taken name.
+test('allows file target names that collide with Object.prototype', () => {
+  const config = createFileLogConfig({
+    app: APP,
+    files: [
+      { name: 'constructor', category: [APP, 'one'], dir },
+      { name: '__proto__', category: [APP, 'two'], dir },
+    ],
+  })
+  expect(Object.keys(config.sinks).sort()).toEqual(['__proto__', 'constructor'])
+})
+
+// logtape's setup() throws `Duplicate logger configuration for category` on these — but only
+// after every sink is built, so the descriptors are already open. Reject before constructing.
+test('rejects two targets sharing a category', () => {
+  expect(() =>
+    createFileLogConfig({
+      app: APP,
+      files: [
+        { name: 'one', category: [APP, 'shared'], dir },
+        { name: 'two', category: [APP, 'shared'], dir },
+      ],
+    }),
+  ).toThrow(/duplicate log category: myapp\.shared/i)
+})
+
+test('compares categories in their normalized array form', () => {
+  expect(() =>
+    createFileLogConfig({
+      app: APP,
+      files: [
+        { name: 'one', category: 'solo', dir },
+        { name: 'two', category: ['solo'], dir },
+      ],
+    }),
+  ).toThrow(/duplicate log category: solo/i)
+})
+
+// createFileSink mkdirs and opens a descriptor per target, so a throw partway through the
+// list would leak the sinks already built. Every name is checked before any is constructed.
+test('opens no sink when a target is rejected', () => {
+  const first = join(dir, 'first')
+  expect(() =>
+    createFileLogConfig({
+      app: APP,
+      files: [
+        { name: 'miss', category: [APP, 'one'], dir: first },
+        { name: 'miss', category: [APP, 'two'], dir },
+      ],
+    }),
+  ).toThrow()
+  expect(existsSync(first)).toBe(false)
+  expect(readdirSync(dir)).toEqual([])
 })
 
 // 'inherit' (logtape's default) UNIONS a category's sinks with its parent's, so

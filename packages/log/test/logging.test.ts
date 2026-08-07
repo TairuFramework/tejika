@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getLogger, isSetup, reset } from '@sozai/log'
@@ -72,4 +72,20 @@ test('leaves the existing configuration alone without reset', () => {
   })
   getLogger([APP, 'a']).info('still first')
   expect(readFileSync(onlyFile(dir), 'utf8')).toContain('still first')
+})
+
+// setup() is first-call-wins and discards the config it is handed. Building that config
+// is not free — every file target mkdirs and opens a descriptor — so an ignored call must
+// not build one at all. The missing directory is the observable proxy for the leaked fd.
+test('builds no config at all when the call is ignored', () => {
+  configureFileLogging({
+    app: APP,
+    files: [{ name: 'first', category: [APP, 'a'], dir, sync: true }],
+  })
+  const second = join(dir, 'second')
+  configureFileLogging({
+    app: APP,
+    files: [{ name: 'second', category: [APP, 'a'], dir: second, sync: true }],
+  })
+  expect(existsSync(second)).toBe(false)
 })

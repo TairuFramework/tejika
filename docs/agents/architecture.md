@@ -11,6 +11,10 @@ apps that compose these packages.
 - **`@tejika/env`** — deterministic local paths, ports, and env-var overrides
   (`getDataDir`, `getStateDir`, `getSocketPath`, `getPIDPath`, `getPort`,
   `parsePort`, `resolvePort`). The foundational concern with no `@tejika` deps.
+- **`@tejika/log`** — local log files: `createFileSink` (a rotating `@logtape/file`
+  sink under `getLogDir(app)`), `createFileLogConfig`, and `configureFileLogging`.
+  The filesystem half of logging, kept out of `@sozai/log` so that package stays
+  browser-safe.
 - **`@tejika/process`** — local daemon lifecycle: detached spawn, foreground
   bootstrap, pidfile/split-brain guard, and Enkaku client management with
   reconnect backoff.
@@ -29,6 +33,7 @@ apps that compose these packages.
 
 ```
 @tejika/env       no @tejika deps (foundational)
+@tejika/log       env + @logtape/file + @logtape/logtape + @sozai/log
 @tejika/process   env + @enkaku/{socket,client,server} + nano-spawn
 @tejika/server    env + @enkaku/http-serve + hono + @hono/node-server + get-port
 @tejika/cli       commander, ink, react; env (default option values)
@@ -36,7 +41,7 @@ apps that compose these packages.
 @tejika/test      env + process + node-pty + strip-ansi (devDependency for consumers)
 ```
 
-`env` underpins `process` and `server`. `cli` and `ui` are independent of each
+`env` underpins `log`, `process` and `server`. `cli` and `ui` are independent of each
 other; consuming apps compose both. `test` builds on `env` + `process` and is
 test-side only — consumers (including tejika's own packages) take it as a
 devDependency.

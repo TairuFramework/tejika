@@ -70,3 +70,14 @@ line of configuration instead of duplicating the convention — and would remove
 `@logtape/file` dependency.
 
 Not urgent: Sakui's CLI path works as hand-rolled, and M1 is not currently scheduled.
+
+## Outcome (2026-08-07)
+
+Both asks accepted and implemented. `getLogDir(app)` landed in `@tejika/env`, defaulting
+to the platform log directory (`envPaths(app).log`) rather than `<dataDir>/logs`, with a
+`<APP>_LOG_DIR` override. The sink factory landed in a new `@tejika/log` package —
+`createFileSink`, `createFileLogConfig`, `configureFileLogging` — keeping `@logtape/file`
+out of the foundational `@tejika/env`. `spawnDaemon`'s default `daemon.log` moved under
+the log dir, a breaking change for consumers that passed no `logPath`.
+
+Sakui migrates in its own repo once these versions publish.

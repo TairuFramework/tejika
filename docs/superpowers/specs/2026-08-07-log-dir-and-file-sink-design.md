@@ -55,12 +55,20 @@ uses. `@sozai/log` provides the logger and the namespace; this package provides 
 
 ### Why `@logtape/logtape` is a peer dependency
 
-Logtape's configuration is process-global: `configureSync`/`setup()` sets it once for the whole
-process, and a second `@logtape/logtape` module instance in the tree means a second, independent
-piece of that global state — sinks configured through one instance are invisible to code that
-imported the other. An app must run exactly one logtape instance, so every package that touches
-logtape's API declares it as a peer and lets the host's package manager collapse everyone onto one
-copy, rather than each package pinning (and thereby risking multiplying) its own.
+Logtape's state splits unevenly across a module instance. The logger tree itself lives on
+`globalThis[Symbol.for("logtape.rootLogger")]` (`dist/logger.js`, `LoggerImpl.getLogger`, ~line
+134), so it is SHARED even across two different `@logtape/logtape` copies in the tree. But the
+`currentConfig` behind `getConfig()`/`isSetup()` (`dist/config.js`, ~line 10) is a plain
+module-level variable, private to each instance. Two instances therefore do not give two
+independent, invisible pieces of state — they give something worse: both instances' `isSetup()`
+reports `false` (each instance's own `currentConfig` is still `null`), so both call `setup()`,
+and both push their sinks onto the same shared logger objects — every record gets written twice.
+And `resetSync()` called through one instance clears the shared logger tree while the other
+instance's `currentConfig` still holds the old config, so its `isSetup()` keeps reporting `true`
+against loggers that no longer have the sinks it thinks they do. An app must run exactly one
+logtape instance, so every package that touches logtape's API declares it as a peer and lets the
+host's package manager collapse everyone onto one copy, rather than each package pinning (and
+thereby risking multiplying) its own.
 
 `@logtape/file` stays a regular dependency, not a peer: it holds no global state — it only builds
 `Sink` values — so there is no instance-multiplication risk to guard against by forcing it onto the
@@ -211,7 +219,7 @@ at a temp directory, asserting the daemon's output lands at `<logDir>/daemon.log
 - `@tejika/log` ships at `0.4.0`, matching the repo's lockstep versioning rather than starting at
   `0.1.0`. This repo has no changesets; `env` and `process` bump with the rest at release time.
 - `AGENTS.md`'s package overview and `docs/agents/architecture.md`'s package list and dependency
-  graph both gain `log`: `env + @logtape/file + @logtape/logtape + @sozai/log`.
+  graph both gain `log`: `env + @logtape/file` (`@logtape/logtape` peer, no `@sozai/log`).
 - The `daemon.log` move is called out as breaking for consumers who never passed `logPath`.
 - On completion, the originating request moves to `docs/agents/plans/completed/` with the triage
   outcome recorded. This design document is ephemeral and does not move with it.

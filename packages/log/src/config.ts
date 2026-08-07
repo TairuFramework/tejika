@@ -1,5 +1,4 @@
-import type { Sink } from '@logtape/logtape'
-import { type Config, getConsoleSink, type LogLevel } from '@sozai/log'
+import { type Config, getConsoleSink, type LogLevel, type Sink } from '@logtape/logtape'
 
 import { createFileSink, type FileSinkOptions } from './file-sink.js'
 
@@ -21,10 +20,12 @@ type FileLogConfig = Config<string, string>
 /**
  * Build a whole logtape `Config` from a list of log files.
  *
- * Separate from {@link configureFileLogging} because `setup()` takes ONE config and is
- * first-call-wins: two helpers cannot each contribute a sink. A host whose layout this
- * does not cover builds its own config, and this one stays testable without touching
- * logtape's process-global state.
+ * This builder is pure: it does not touch logtape's process-global state. Pass the
+ * result to `@sozai/log`'s (or your own) `setup()` yourself. That `setup()` is
+ * first-call-wins: if logging is already configured it returns early and DISCARDS the
+ * config it was handed, so a caller that means to reconfigure must call `reset()`
+ * first — a `reset` flag placed inside this config would never reach `configureSync`
+ * and would be silently swallowed.
  *
  * Building a config is NOT free: every file target creates its directory and opens a
  * descriptor. Build one only when it is going to be used — every target is validated
@@ -48,11 +49,14 @@ export function createFileLogConfig(options: FileLogConfigOptions): FileLogConfi
     names.add(file.name)
     // logtape keys loggers by category, and its own setup() rejects a repeat with
     // `Duplicate logger configuration for category` — long after the sinks are open.
-    const category = (Array.isArray(file.category) ? file.category : [file.category]).join('.')
-    if (categories.has(category)) {
-      throw new Error(`Duplicate log category: ${category}`)
+    const normalized = Array.isArray(file.category) ? file.category : [file.category]
+    // JSON.stringify of the normalized array, not .join('.'): a join would equate the
+    // string 'a.b' with the array ['a', 'b'], rejecting two genuinely distinct categories.
+    const categoryKey = JSON.stringify(normalized)
+    if (categories.has(categoryKey)) {
+      throw new Error(`Duplicate log category: ${normalized.join('.')}`)
     }
-    categories.add(category)
+    categories.add(categoryKey)
   }
 
   // Null-prototype: a target named `__proto__` must become an own property, not a setter call.

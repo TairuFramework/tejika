@@ -96,6 +96,19 @@ test('compares categories in their normalized array form', () => {
   ).toThrow(/duplicate log category: solo/i)
 })
 
+// A join('.') would equate the string 'a.b' with the array ['a', 'b'], rejecting a
+// legitimate pair as a duplicate. Comparing normalized arrays keeps them distinct.
+test('accepts a dotted string category alongside its distinct segments', () => {
+  const config = createFileLogConfig({
+    app: APP,
+    files: [
+      { name: 'one', category: 'a.b', dir },
+      { name: 'two', category: ['a', 'b'], dir },
+    ],
+  })
+  expect(Object.keys(config.sinks).sort()).toEqual(['one', 'two'])
+})
+
 // createFileSink mkdirs and opens a descriptor per target, so a throw partway through the
 // list would leak the sinks already built. Every name is checked before any is constructed.
 test('opens no sink when a target is rejected', () => {

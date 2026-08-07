@@ -24,11 +24,13 @@
   },
   "dependencies": {
     "@logtape/file": "catalog:",
-    "@logtape/logtape": "catalog:",
-    "@sozai/log": "catalog:",
     "@tejika/env": "workspace:^"
   },
   "devDependencies": {
+    "@logtape/logtape": "catalog:",
     "@types/node": "catalog:"
+  },
+  "peerDependencies": {
+    "@logtape/logtape": "catalog:"
   }
 }

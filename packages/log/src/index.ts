@@ -9,4 +9,3 @@ export {
   type FileSinkOptions,
   type FileSinkRotation,
 } from './file-sink.js'
-export { type ConfigureFileLoggingOptions, configureFileLogging } from './logging.js'

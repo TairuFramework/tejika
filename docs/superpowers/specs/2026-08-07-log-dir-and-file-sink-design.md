@@ -186,8 +186,17 @@ empty-or-whitespace override falling back to the default.
   instead;
 - a rejected target opens no sink, since validation runs before construction.
 
-Building a config opens files, so these tests point their targets at an `mkdtemp` directory. No test
-here configures logtape: the builder is pure, and `setup()` belongs to the host.
+Building a config opens files, so these tests point their targets at an `mkdtemp` directory. The
+builder itself stays pure — it never touches logtape's process-global state — but
+`packages/log/test/logtape-integration.test.ts` verifies the *output* against real logtape, since
+`config.test.ts` only asserts that output as data. It calls `@logtape/logtape`'s own
+`configureSync()` directly (a devDependency, not `@sozai/log`) on a `createFileLogConfig` result,
+logs through `getLogger()`, and reads the record back off disk: a record reaches its configured
+file, a record in a different category does not, and a record still reaches its file when
+`console: true` is also set. `resetSync()` runs in `afterEach`, since logtape's configuration is
+process-global; `sync: true` targets mean nothing needs disposing first. Calling `setup()` still
+belongs to the host — this test proves the config `setup()` receives is one logtape accepts, not
+that this package calls `setup()` itself.
 
 `packages/process`: no existing test asserts the default log path — `controller.test.ts` and
 `mutex.test.ts` both pass `logPath` explicitly. Add one that omits it, with `<APP>_LOG_DIR` pointed

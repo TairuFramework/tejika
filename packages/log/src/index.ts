@@ -1,4 +1,9 @@
 export {
+  createFileLogConfig,
+  type FileLogConfigOptions,
+  type FileLogTarget,
+} from './config.js'
+export {
   createFileSink,
   type FileSinkFormat,
   type FileSinkOptions,

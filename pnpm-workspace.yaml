@@ -4,25 +4,27 @@ packages:
 nodeLinker: hoisted
 
 catalog:
-  '@enkaku/client': ^0.20.0
-  '@enkaku/http-serve': ^0.20.0
-  '@enkaku/protocol': ^0.20.0
-  '@enkaku/server': ^0.20.0
-  '@enkaku/socket': ^0.20.0
-  '@hono/node-server': ^2.0.11
+  '@enkaku/client': ^0.21.0
+  '@enkaku/http-serve': ^0.21.0
+  '@enkaku/protocol': ^0.21.0
+  '@enkaku/server': ^0.21.0
+  '@enkaku/socket': ^0.21.0
+  '@hono/node-server': ^2.1.0
   '@inkjs/ui': ^2.0.0
+  '@logtape/file': ^2.3.0
+  '@logtape/logtape': ^2.3.0
   '@sozai/lock': ^0.1.0
-  '@types/node': ^26.1.1
-  '@types/react': ^19.2.17
+  '@types/node': ^26.1.2
+  '@types/react': ^19.2.18
   commander: ^15.0.0
   env-paths: ^4.0.0
   get-port: ^7.2.0
-  hono: ^4.12.31
+  hono: ^4.13.0
   ink: ^7.1.1
   ink-testing-library: ^4.0.0
   nano-spawn: ^2.1.0
   node-pty: ^1.1.0
-  react: ^19.2.7
+  react: ^19.2.8
   strip-ansi: ^7.2.0
 
 catalogMode: manual

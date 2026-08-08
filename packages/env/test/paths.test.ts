@@ -1,10 +1,18 @@
 import { afterEach, describe, expect, test } from 'vitest'
 
-import { getDataDir, getLockPath, getPIDPath, getSocketPath, getStateDir } from '../src/paths.js'
+import {
+  getDataDir,
+  getLockPath,
+  getLogDir,
+  getPIDPath,
+  getSocketPath,
+  getStateDir,
+} from '../src/paths.js'
 
 afterEach(() => {
   delete process.env.MYAPP_DATA_DIR
   delete process.env.MYAPP_STATE_DIR
+  delete process.env.MYAPP_LOG_DIR
   delete process.env.MYAPP_SOCKET_PATH
   delete process.env.MYAPP_PID_PATH
 })
@@ -26,6 +34,21 @@ describe('getStateDir', () => {
   test('honors the env override first', () => {
     process.env.MYAPP_STATE_DIR = '/tmp/custom-state'
     expect(getStateDir('myapp')).toBe('/tmp/custom-state')
+  })
+})
+
+describe('getLogDir', () => {
+  test('returns a deterministic per-app log dir', () => {
+    expect(getLogDir('myapp')).toMatch(/myapp/)
+  })
+  test('honors the env override first', () => {
+    process.env.MYAPP_LOG_DIR = '/tmp/custom-logs'
+    expect(getLogDir('myapp')).toBe('/tmp/custom-logs')
+  })
+  // `MYAPP_LOG_DIR= node …` defines the var as '' — must fall back, not return ''.
+  test('falls back when the override is empty', () => {
+    process.env.MYAPP_LOG_DIR = ''
+    expect(getLogDir('myapp')).toMatch(/myapp/)
   })
 })
 

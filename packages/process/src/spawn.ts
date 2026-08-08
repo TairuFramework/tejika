@@ -1,6 +1,6 @@
 import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { getDataDir, getPIDPath, getSocketPath } from '@tejika/env'
+import { getLogDir, getPIDPath, getSocketPath } from '@tejika/env'
 import spawn from 'nano-spawn'
 
 import { createDeadline, type Deadline } from './deadline.js'
@@ -16,6 +16,7 @@ export type SpawnDaemonOptions = {
   args?: Array<string>
   socketPath?: string
   pidPath?: string
+  /** Defaults to `<logDir>/daemon.log`. */
   logPath?: string
   /** Merged over `process.env` for the child. */
   env?: Record<string, string>
@@ -61,10 +62,12 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
   // had no path to read) and every losing child became a `DaemonBootError`. Explicit also avoids
   // a parent/child divergence: env's PID_PATH override could resolve differently in the child.
   const pidPath = opts.pidPath ?? getPIDPath(opts.app)
-  const logPath = opts.logPath ?? join(getDataDir(opts.app), 'daemon.log')
+  const logPath = opts.logPath ?? join(getLogDir(opts.app), 'daemon.log')
   const deadline = opts.deadline ?? createDeadline(opts.timeoutMs ?? 3000, opts.signal)
 
-  mkdirSync(dirname(logPath), { recursive: true })
+  // Owner-only, matching @tejika/log's createFileSink on the same directory: local logs
+  // hold personal data, and whichever of the two runs first must not leave it wider.
+  mkdirSync(dirname(logPath), { recursive: true, mode: 0o700 })
   mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 })
 
   const args = [opts.entry, '--socket-path', socketPath, '--pid-path', pidPath]

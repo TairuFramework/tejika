@@ -7,20 +7,20 @@ settings:
 catalogs:
   default:
     '@enkaku/client':
-      specifier: ^0.20.0
-      version: 0.20.0
+      specifier: ^0.21.0
+      version: 0.21.0
     '@enkaku/http-serve':
-      specifier: ^0.20.0
-      version: 0.20.0
+      specifier: ^0.21.0
+      version: 0.21.0
     '@enkaku/protocol':
-      specifier: ^0.20.0
-      version: 0.20.0
+      specifier: ^0.21.0
+      version: 0.21.0
     '@enkaku/server':
-      specifier: ^0.20.0
-      version: 0.20.0
+      specifier: ^0.21.0
+      version: 0.21.0
     '@enkaku/socket':
-      specifier: ^0.20.0
-      version: 0.20.0
+      specifier: ^0.21.0
+      version: 0.21.0
     '@hono/node-server':
       specifier: ^2.1.0
       version: 2.1.0
@@ -78,8 +78,8 @@ importers:
   .:
     devDependencies:
       '@kigu/dev':
-        specifier: ^0.2.0
-        version: 0.2.0(@opentelemetry/api@1.9.1)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.1)(tsx@4.23.9))
+        specifier: ^0.2.1
+        version: 0.2.1(@opentelemetry/api@1.9.1)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.1)(tsx@4.23.9))
 
   packages/cli:
     dependencies:
@@ -142,16 +142,16 @@ importers:
     dependencies:
       '@enkaku/client':
         specifier: 'catalog:'
-        version: 0.20.0
+        version: 0.21.0(@logtape/logtape@2.3.0)
       '@enkaku/protocol':
         specifier: 'catalog:'
-        version: 0.20.0
+        version: 0.21.0(@logtape/logtape@2.3.0)
       '@enkaku/server':
         specifier: 'catalog:'
-        version: 0.20.0
+        version: 0.21.0(@logtape/logtape@2.3.0)
       '@enkaku/socket':
         specifier: 'catalog:'
-        version: 0.20.0
+        version: 0.21.0(@logtape/logtape@2.3.0)
       '@sozai/lock':
         specifier: 'catalog:'
         version: 0.1.0
@@ -170,10 +170,10 @@ importers:
     dependencies:
       '@enkaku/http-serve':
         specifier: 'catalog:'
-        version: 0.20.0
+        version: 0.21.0(@logtape/logtape@2.3.0)
       '@enkaku/protocol':
         specifier: 'catalog:'
-        version: 0.20.0
+        version: 0.21.0(@logtape/logtape@2.3.0)
       '@hono/node-server':
         specifier: 'catalog:'
         version: 2.1.0(hono@4.13.0)
@@ -205,7 +205,7 @@ importers:
     devDependencies:
       '@enkaku/server':
         specifier: 'catalog:'
-        version: 0.20.0
+        version: 0.21.0(@logtape/logtape@2.3.0)
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.2
@@ -308,26 +308,26 @@ packages:
   '@emnapi/wasi-threads@1.2.2':
     resolution: {integrity: sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA==}
 
-  '@enkaku/client@0.20.0':
-    resolution: {integrity: sha512-yx4yBWZDbzlrcCqhNU6jXLJJFH8wFAj3msnemt7hiFkVSyU2QmOjrGwO3h2AjQ8sXhs+JuSIFYzi/vOgsMhS9A==}
+  '@enkaku/client@0.21.0':
+    resolution: {integrity: sha512-X9SqK64HYNHRguAjk2z6/1i0zdW9Sx2NQeitZVg/NalcyUrc4m2e96WL1z/R4/RR6YgKa6GGPkzVHmCN4sryPA==}
 
-  '@enkaku/http-serve@0.20.0':
-    resolution: {integrity: sha512-sJjFRO4MQLK6yGaGIZTTMsr53XDCqS0xDRc8WNa5ZiUgCFUKQgqjGkK3U+TVR9tIYcaKpJoCCa/wR2riFTgEQA==}
+  '@enkaku/http-serve@0.21.0':
+    resolution: {integrity: sha512-C2nVUAs/yxh0Onos0ltHkjlnz0kAOlZG3L20E5e+g65gAFTwDaF2/Rr8uFaEMV+8bJi5JJVIGcjtskoWQUiVPQ==}
 
-  '@enkaku/otel@0.20.0':
-    resolution: {integrity: sha512-XFTQXjhToEWEuumRtuZXtAHTS22Ly7gE97GFdLj1nzGbNFSOhLwgtmnKAo8Lw3tx94uaeRHmLu0J4baZylFufQ==}
+  '@enkaku/otel@0.21.0':
+    resolution: {integrity: sha512-lf/2gyuuz4v5jzjKqx2pZlbaFzW/Ajnr4zeSOgjLgBV3QdTaOKKlMDmD5R1XJV1rvsPGMwKRkZI7Bnd0kQReHw==}
 
-  '@enkaku/protocol@0.20.0':
-    resolution: {integrity: sha512-jrkUcKiq947l/xK5sK6V3KMPeADMvq5JmRexgFL4sXdyULaer6KuPys52xVwFmtGiltkGRA+dxMQKD4bjmOfpg==}
+  '@enkaku/protocol@0.21.0':
+    resolution: {integrity: sha512-ihr2btoqWj7GHFrHcGhizqmwnAg4nBxXeSJy4Tq33MllRb6Pwt7jbqlIzV1mCKMGShdqcronipB3cz6XOJj/Zg==}
 
-  '@enkaku/server@0.20.0':
-    resolution: {integrity: sha512-hPA/gAKpIM0hpV4GX5gV6gn/MCKb1DpHQn7ck9btzcDW+0glUj7yyZJA2ENrLkTTJ3yexEdmuMRDIND6MPRekA==}
+  '@enkaku/server@0.21.0':
+    resolution: {integrity: sha512-swnPI8Nxk6sm+ccxQG8immV4l+nmn/eDlUXCur/xOgeklp+ldZJKldvyXXNjmmOINbeYlh3z2hcd0s0c3RTlng==}
 
-  '@enkaku/socket@0.20.0':
-    resolution: {integrity: sha512-HsPbZNE79IgL14paIME0dIULw4l1Ek1amOY89bKgA0tgGBPcK0/7GrNZu/xcxBvDjvMhjSQZ+uY+Zj5mdBmmPw==}
+  '@enkaku/socket@0.21.0':
+    resolution: {integrity: sha512-ubzXkS20fnuC4RD+i44AxAc72QoWUTqIvAaTsbtNSxmAEOT0T/kHuvFdj0PgLPuKY8+sQbfD2Gy1w++cY1AyBQ==}
 
-  '@enkaku/transport@0.20.0':
-    resolution: {integrity: sha512-9ZUDJdqpyUAg01jKvBOpxnjsrXr6mKzeWUxEfJKLcvGf7t/H1w5NT3Dm58TGMk6dz7C3bpEV1g1XJuFzMWaUbA==}
+  '@enkaku/transport@0.21.0':
+    resolution: {integrity: sha512-7ilSGDet7FrV3yOK1+qksk99qcHlXGJG+61O1YZf216ZbdyZy6poYiMa6p6JIAH6nB4nC9UuoBrp7CJdjeFFCQ==}
 
   '@esbuild/aix-ppc64@0.28.1':
     resolution: {integrity: sha512-Svl7tq8k/08+p6CXPpRjQ1fKX+1odH/BQbb48fV6fj3CWHhsoIOoY87w1oHXm0qEpkIK3ZfVgp0hed3XBXzXMQ==}
@@ -503,26 +503,23 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@kigu/dev@0.2.0':
-    resolution: {integrity: sha512-MhMr+kuagzZT781RVfloXf6s7E/AsyJ85dcCcmigua69SY9fLUBqF/RCBW8NZnzUraDvapp4PAPwL3HwIUdK7w==}
+  '@kigu/dev@0.2.1':
+    resolution: {integrity: sha512-L1FSMZlgHHqiqvXlwdlvfRDnYUSWYuGzJ+20ouuitvWX8+wIExmc4p2XMsqKVyqEbB1pOZFxGx8+A52n0ehVhQ==}
     hasBin: true
 
-  '@kokuin/capability@0.2.1':
-    resolution: {integrity: sha512-SCAis58pnh9cyheTSVDYzqUw6BvR+RdJ1qghjp4luXPW8adxXbCBCs4DsH3IL+okoeHXDE+Rs8HCchnqHm79HQ==}
+  '@kokuin/capability@0.2.2':
+    resolution: {integrity: sha512-4tVBNszVBxzZk7xgswi0Tg/MXE9zmoNuCKe2TqznEMHsIbLyv+RO3F05+KzUZ1zMmKSZBjVpvPI886PmGN5ozA==}
 
   '@kokuin/otel@0.3.0':
     resolution: {integrity: sha512-XwnBYkrglkV0aVcPx/ajDL6DNAZgFeZ7cNyzAHMW6ex4/RyY9xJ7htNYzl/sCFlYMNQ8M/lPayrzYf3hdN4dUQ==}
 
-  '@kokuin/token@0.3.0':
-    resolution: {integrity: sha512-31bRe9buWFFiSaNHvpGFgjWmp0IOXrkr7hHKgr/lrIB174budAaY0QE4XEmCIa69ziItwtNdFpwcWagHD/CU/g==}
+  '@kokuin/token@0.4.0':
+    resolution: {integrity: sha512-bLUYY6jV60EQ+GM6D9F225/cCquoQDWjbWoimZLDAUttPCtTQ/u3qWKo6q6ttsPT6cTruG8qzge9HqkVCKxibg==}
 
   '@logtape/file@2.3.0':
     resolution: {integrity: sha512-IO1IV+WSmEjf6RpdS7EnbcytrV4EUbDngeZhSeTrXQjremGZPljwqQsgjTXaK845jwIUhV2852ezAA7UBfMyXQ==}
     peerDependencies:
       '@logtape/logtape': ^2.3.0
-
-  '@logtape/logtape@2.2.4':
-    resolution: {integrity: sha512-2rALzv9m4ibE5FyB8/FMm5MPMMlK7ujgy3ufricVKIxj6e7SZbw4w6J16/fRAsXgdDlOXPUA0aa6XoEQvdlKxw==}
 
   '@logtape/logtape@2.3.0':
     resolution: {integrity: sha512-s/pxCgf9Gg75ypTV/bRUq355Dy/JP/zUJWfgJQPO5pTkXC23X2AXBcmBBgFiWH+bSi4yiX/G06qGV8CdAWD3SA==}
@@ -650,12 +647,12 @@ packages:
     resolution: {integrity: sha512-Z6pjIZ/8IJcCGzb2S/0Px5J81yij85xASuk1teLNeg75bfT07MV3a/O2Mtn1I2se43k3lkVEcFaR10N4cgQcZA==}
     engines: {node: '>= 20.19.0'}
 
-  '@noble/curves@2.2.0':
-    resolution: {integrity: sha512-T/BoHgFXirb0ENSPBquzX0rcjXeM6Lo892a2jlYJkqk83LqZx0l1Of7DzlKJ6jkpvMrkHSnAcgb5JegL8SeIkQ==}
+  '@noble/curves@2.3.0':
+    resolution: {integrity: sha512-v7cY+4oWYPQszRj6ZFGzTVL7uP2TaLo1xMhWHzYC5wj0ZhOXQ5x+sBre8rF3hi8cAoi0bh1qXoovoOkdFtvqEg==}
     engines: {node: '>= 20.19.0'}
 
-  '@noble/hashes@2.2.0':
-    resolution: {integrity: sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==}
+  '@noble/hashes@2.3.0':
+    resolution: {integrity: sha512-oN+QwyX7VSHotibwubG3kpzbwKrfnyR6OOO+3Nk/53ADL7FmgHHz4TgrbaYKvvOw09u6QTx0oiH1cNCIOuN0CQ==}
     engines: {node: '>= 20.19.0'}
 
   '@nodelib/fs.scandir@2.1.5':
@@ -670,8 +667,8 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@opentelemetry/api-logs@0.220.0':
-    resolution: {integrity: sha512-CmVa4ImJ+ynfrPMNaAXHET6Bhb44SwzmfyVJFq9ni2jgXJR/l7C6gfVFddNmHP+ZOkP9cf4f9DBe68qVLTHc9w==}
+  '@opentelemetry/api-logs@0.221.0':
+    resolution: {integrity: sha512-OlanaW1vv7ufTqQ3/fPLI4arGt5ZoM+P8abOMki6uEYnpRazepSWDwDnnw+la7kE26SHVC18//SMccrDvLKOXQ==}
     engines: {node: '>=8.0.0'}
 
   '@opentelemetry/api@1.9.1':
@@ -803,23 +800,28 @@ packages:
   '@sozai/async@0.2.1':
     resolution: {integrity: sha512-pWJtDAlWSAUpRmqFQluyYKHuoQFOLmdy9/WT0EBWvqWTTe6s/Vy8+e2BxS2YMOK6vwsPuwSSEOlf6PvdF597+A==}
 
-  '@sozai/codec@0.2.0':
-    resolution: {integrity: sha512-HBbJY76Vso59kGJMxgGAtcnPYugY5TCWR4lhzJsjjtaX1oTs1F8SUWliUmgcRJZfHmnJO4tY03J7C/iy6SqXvw==}
+  '@sozai/codec@0.4.0':
+    resolution: {integrity: sha512-ENz2qf7FIn4DpjvYXjjRFszFXAoS7saYLcza0ZJGJwzWW0UoQWkU6qEIj58iQNfyHirMiiBVdENCcU5YaUSJRw==}
 
-  '@sozai/event@0.1.1':
-    resolution: {integrity: sha512-kWsu7tKy9SLq5mn8ZavcGqPg7E37mwMkI3F96cstNFh1zexmYqHphMl0ya43oXY/3ONW4j8o/zziw82MYrbLnA==}
+  '@sozai/event@0.1.3':
+    resolution: {integrity: sha512-9dD6IZZllWfsDttjqsN8nnxk+ohvCJQZtYBETxkDK85tglzc/S91u0j4m0tDA5DJsls0U1vF5NvGRMIr93azVw==}
 
   '@sozai/execution@0.2.1':
     resolution: {integrity: sha512-vQLquTIbnD+WQBpszBsDGQlU5DBIip/gZ7aqq0uHem2C5aN/TGPCrcpqelyiYMGswBNEJ2u/CL6/EmIo4cBHRA==}
 
+  '@sozai/json@0.1.1':
+    resolution: {integrity: sha512-5ftTPdDYVeFj14VZWBKi4jV5Xu0XC2yioNEWXgSfrdw9QkCY+R6nNwkukHaVwyFAnz8qLnKHYNjg+42gxAOo4Q==}
+
   '@sozai/lock@0.1.0':
     resolution: {integrity: sha512-A9Gkw7DlG7kj0wDlK9RuUMd+PIZoIFlRAI19TCTmPW/G7wvx/c1/OQ8b66d4rFQZVkpeb6G/GAyOglx8rC84BA==}
 
-  '@sozai/log@0.2.0':
-    resolution: {integrity: sha512-QxBBFSSC9be7Es/r2KYPs/yMWu/zGl+oV4QJE8ycaN47KP1CtoOXd7M6dPsHhHJfHYNFTOmXW4DJ9ALq3f8cyg==}
+  '@sozai/log@0.3.1':
+    resolution: {integrity: sha512-IblWrhbUOd6KCkG+Dzr9ZS+Dgyhqr5W3Zb1CbZUN5r2ybBAN5WL9GTn7L45bLuQOSp0RzjDeqB7OH39InMm0yg==}
+    peerDependencies:
+      '@logtape/logtape': ^2.3.0
 
-  '@sozai/otel@0.3.0':
-    resolution: {integrity: sha512-NDS0yyuGid/LMDaLTiFCohEQWjet7hSvf/iznHofe2HDbEc0CoyeJrPjsXLVm6zJYyUwQLj4P06wdL5m9Wm2zQ==}
+  '@sozai/otel@0.3.2':
+    resolution: {integrity: sha512-GLflQwFbRI7JeXa2Fnyte7LxJtJUwAwYe0hAtOHcrrwUCgLBoTbnLyptmhC/0LYEQQKEzCkYEg1TygWk4SyMjg==}
 
   '@sozai/result@0.2.0':
     resolution: {integrity: sha512-voMSX9KYJG6zlCvCYmiBvhMmgM1rCXQw0I/tOK+GaaXtZTDL+GXOhdN9eAs6tI/bLKub6UqZwsS/iw2JFKujTw==}
@@ -1155,11 +1157,6 @@ packages:
     resolution: {integrity: sha512-SVXGH037+Mo1aIMO5B2UcleR43FGjFdN+M8JObSyEoQ2Mn4CODRWx28gN5jiTF0n5ItsgtIZfyargMNs8GX4kg==}
     engines: {node: '>=18'}
 
-  canonicalize@3.0.0:
-    resolution: {integrity: sha512-yYLfHyDMIXRyRqsKBRLX023riFLpXY2YOfdtqKXZRZy9qsfOJ9U+4F9YZL7MEzL5+ziN2x2nlBvY/Voi3EBljA==}
-    engines: {node: '>=18'}
-    hasBin: true
-
   chai@6.2.2:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
     engines: {node: '>=18'}
@@ -1311,8 +1308,8 @@ packages:
     resolution: {integrity: sha512-7MptL8U0cqcFdzIzwOTHoilX9x5BrNqye7Z/LuC7kCMRio1EMSyqRK3BEAUD7sXRq4iT4AzTVuZdhgQ2TCvYLg==}
     engines: {node: '>=8.6.0'}
 
-  fast-uri@3.1.4:
-    resolution: {integrity: sha512-8JnbkQ4juDyvYs4mgFGQqg4yCYtFDtUtmp2QIQq11ZZe5CFQ5wcqm1rqDgAh/QdMySuBnPzMUiJUNZG5N/AiQw==}
+  fast-uri@3.1.5:
+    resolution: {integrity: sha512-gHwA1O9LDIcKunMKhObS/HimwtehO1nPUECKAu5TpKgaO19fcWEl4bliWe1jWxVFvIXztJjjQ4L8XQ1EU9f7Jw==}
 
   fastq@1.20.1:
     resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
@@ -2201,63 +2198,78 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@enkaku/client@0.20.0':
+  '@enkaku/client@0.21.0(@logtape/logtape@2.3.0)':
     dependencies:
-      '@enkaku/otel': 0.20.0
-      '@kokuin/token': 0.3.0
+      '@enkaku/otel': 0.21.0(@logtape/logtape@2.3.0)
+      '@kokuin/token': 0.4.0(@logtape/logtape@2.3.0)
       '@sozai/async': 0.2.1
-      '@sozai/event': 0.1.1
+      '@sozai/event': 0.1.3(@logtape/logtape@2.3.0)
       '@sozai/execution': 0.2.1
-      '@sozai/log': 0.2.0
-      '@sozai/otel': 0.3.0
+      '@sozai/log': 0.3.1(@logtape/logtape@2.3.0)
+      '@sozai/otel': 0.3.2(@logtape/logtape@2.3.0)
       '@sozai/runtime': 0.1.0
       '@sozai/stream': 0.2.0
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
-  '@enkaku/http-serve@0.20.0':
+  '@enkaku/http-serve@0.21.0(@logtape/logtape@2.3.0)':
     dependencies:
-      '@enkaku/otel': 0.20.0
-      '@enkaku/protocol': 0.20.0
-      '@enkaku/transport': 0.20.0
+      '@enkaku/otel': 0.21.0(@logtape/logtape@2.3.0)
+      '@enkaku/protocol': 0.21.0(@logtape/logtape@2.3.0)
+      '@enkaku/transport': 0.21.0(@logtape/logtape@2.3.0)
       '@sozai/async': 0.2.1
-      '@sozai/otel': 0.3.0
+      '@sozai/otel': 0.3.2(@logtape/logtape@2.3.0)
       '@sozai/runtime': 0.1.0
       '@sozai/stream': 0.2.0
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
-  '@enkaku/otel@0.20.0':
+  '@enkaku/otel@0.21.0(@logtape/logtape@2.3.0)':
     dependencies:
       '@opentelemetry/api': 1.9.1
-      '@sozai/otel': 0.3.0
+      '@sozai/otel': 0.3.2(@logtape/logtape@2.3.0)
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
-  '@enkaku/protocol@0.20.0':
+  '@enkaku/protocol@0.21.0(@logtape/logtape@2.3.0)':
     dependencies:
-      '@kokuin/token': 0.3.0
+      '@kokuin/token': 0.4.0(@logtape/logtape@2.3.0)
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
-  '@enkaku/server@0.20.0':
+  '@enkaku/server@0.21.0(@logtape/logtape@2.3.0)':
     dependencies:
-      '@enkaku/otel': 0.20.0
-      '@enkaku/protocol': 0.20.0
-      '@kokuin/capability': 0.2.1
-      '@kokuin/token': 0.3.0
+      '@enkaku/otel': 0.21.0(@logtape/logtape@2.3.0)
+      '@enkaku/protocol': 0.21.0(@logtape/logtape@2.3.0)
+      '@kokuin/capability': 0.2.2(@logtape/logtape@2.3.0)
+      '@kokuin/token': 0.4.0(@logtape/logtape@2.3.0)
       '@sozai/async': 0.2.1
-      '@sozai/event': 0.1.1
-      '@sozai/log': 0.2.0
-      '@sozai/otel': 0.3.0
+      '@sozai/codec': 0.4.0
+      '@sozai/event': 0.1.3(@logtape/logtape@2.3.0)
+      '@sozai/log': 0.3.1(@logtape/logtape@2.3.0)
+      '@sozai/otel': 0.3.2(@logtape/logtape@2.3.0)
       '@sozai/runtime': 0.1.0
       '@sozai/schema': 0.1.1
       '@sozai/stream': 0.2.0
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
-  '@enkaku/socket@0.20.0':
+  '@enkaku/socket@0.21.0(@logtape/logtape@2.3.0)':
     dependencies:
-      '@enkaku/otel': 0.20.0
-      '@enkaku/transport': 0.20.0
-      '@sozai/otel': 0.3.0
+      '@enkaku/otel': 0.21.0(@logtape/logtape@2.3.0)
+      '@enkaku/transport': 0.21.0(@logtape/logtape@2.3.0)
+      '@sozai/otel': 0.3.2(@logtape/logtape@2.3.0)
       '@sozai/stream': 0.2.0
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
-  '@enkaku/transport@0.20.0':
+  '@enkaku/transport@0.21.0(@logtape/logtape@2.3.0)':
     dependencies:
       '@sozai/async': 0.2.1
-      '@sozai/event': 0.1.1
+      '@sozai/event': 0.1.3(@logtape/logtape@2.3.0)
       '@sozai/stream': 0.2.0
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
   '@esbuild/aix-ppc64@0.28.1':
     optional: true
@@ -2353,7 +2365,7 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@kigu/dev@0.2.0(@opentelemetry/api@1.9.1)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.1)(tsx@4.23.9))':
+  '@kigu/dev@0.2.1(@opentelemetry/api@1.9.1)(vite@8.1.0(@types/node@26.1.2)(esbuild@0.28.1)(tsx@4.23.9))':
     dependencies:
       '@biomejs/biome': 2.5.7
       '@swc/cli': 0.8.1(@swc/core@1.15.47)
@@ -2383,31 +2395,35 @@ snapshots:
       - supports-color
       - vite
 
-  '@kokuin/capability@0.2.1':
+  '@kokuin/capability@0.2.2(@logtape/logtape@2.3.0)':
     dependencies:
-      '@kokuin/token': 0.3.0
+      '@kokuin/token': 0.4.0(@logtape/logtape@2.3.0)
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
-  '@kokuin/otel@0.3.0':
+  '@kokuin/otel@0.3.0(@logtape/logtape@2.3.0)':
     dependencies:
       '@opentelemetry/api': 1.9.1
-      '@sozai/otel': 0.3.0
+      '@sozai/otel': 0.3.2(@logtape/logtape@2.3.0)
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
-  '@kokuin/token@0.3.0':
+  '@kokuin/token@0.4.0(@logtape/logtape@2.3.0)':
     dependencies:
-      '@kokuin/otel': 0.3.0
+      '@kokuin/otel': 0.3.0(@logtape/logtape@2.3.0)
       '@noble/ciphers': 2.2.0
-      '@noble/curves': 2.2.0
-      '@noble/hashes': 2.2.0
+      '@noble/curves': 2.3.0
+      '@noble/hashes': 2.3.0
       '@scure/base': 2.2.0
-      '@sozai/codec': 0.2.0
-      '@sozai/otel': 0.3.0
+      '@sozai/codec': 0.4.0
+      '@sozai/otel': 0.3.2(@logtape/logtape@2.3.0)
       '@sozai/schema': 0.1.1
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
   '@logtape/file@2.3.0(@logtape/logtape@2.3.0)':
     dependencies:
       '@logtape/logtape': 2.3.0
-
-  '@logtape/logtape@2.2.4': {}
 
   '@logtape/logtape@2.3.0': {}
 
@@ -2492,11 +2508,11 @@ snapshots:
 
   '@noble/ciphers@2.2.0': {}
 
-  '@noble/curves@2.2.0':
+  '@noble/curves@2.3.0':
     dependencies:
-      '@noble/hashes': 2.2.0
+      '@noble/hashes': 2.3.0
 
-  '@noble/hashes@2.2.0': {}
+  '@noble/hashes@2.3.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -2510,7 +2526,7 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@opentelemetry/api-logs@0.220.0':
+  '@opentelemetry/api-logs@0.221.0':
     dependencies:
       '@opentelemetry/api': 1.9.1
 
@@ -2583,32 +2599,39 @@ snapshots:
 
   '@sozai/async@0.2.1': {}
 
-  '@sozai/codec@0.2.0':
+  '@sozai/codec@0.4.0':
     dependencies:
-      canonicalize: 3.0.0
+      '@sozai/json': 0.1.1
 
-  '@sozai/event@0.1.1':
+  '@sozai/event@0.1.3(@logtape/logtape@2.3.0)':
     dependencies:
       '@sozai/async': 0.2.1
+      '@sozai/log': 0.3.1(@logtape/logtape@2.3.0)
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
   '@sozai/execution@0.2.1':
     dependencies:
       '@sozai/async': 0.2.1
       '@sozai/result': 0.2.0
 
+  '@sozai/json@0.1.1': {}
+
   '@sozai/lock@0.1.0':
     dependencies:
       '@sozai/async': 0.2.1
 
-  '@sozai/log@0.2.0':
+  '@sozai/log@0.3.1(@logtape/logtape@2.3.0)':
     dependencies:
-      '@logtape/logtape': 2.2.4
+      '@logtape/logtape': 2.3.0
 
-  '@sozai/otel@0.3.0':
+  '@sozai/otel@0.3.2(@logtape/logtape@2.3.0)':
     dependencies:
       '@opentelemetry/api': 1.9.1
-      '@opentelemetry/api-logs': 0.220.0
-      '@sozai/log': 0.2.0
+      '@opentelemetry/api-logs': 0.221.0
+      '@sozai/log': 0.3.1(@logtape/logtape@2.3.0)
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
   '@sozai/result@0.2.0':
     dependencies:
@@ -2909,7 +2932,7 @@ snapshots:
   ajv@8.20.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.4
+      fast-uri: 3.1.5
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -2970,8 +2993,6 @@ snapshots:
       mimic-response: 4.0.0
       normalize-url: 8.1.1
       responselike: 4.0.2
-
-  canonicalize@3.0.0: {}
 
   chai@6.2.2: {}
 
@@ -3145,7 +3166,7 @@ snapshots:
       merge2: 1.4.1
       micromatch: 4.0.8
 
-  fast-uri@3.1.4: {}
+  fast-uri@3.1.5: {}
 
   fastq@1.20.1:
     dependencies:

@@ -170,8 +170,10 @@ test('silences the meta logger when there is no console sink', () => {
   expect(config.loggers.some((logger) => logger.category.length === 0)).toBe(false)
 })
 
-// Mirrors @sozai/log's getDefaultConfig: the root entry also counts as configuring
-// the meta logger, so no separate suppression entry belongs here.
+// Mirrors @sozai/log's getDefaultConfig, meta entry included: the root entry satisfies
+// logtape's "is the meta logger configured" check but leaves that logger's own level at
+// 'trace', so the meta entry is what actually pins it. It names no sink — it inherits the
+// root's console, where a second 'console' entry would print every meta record twice.
 test('adds a console root entry when the console is enabled', () => {
   const config = createFileLogConfig({
     app: APP,
@@ -182,11 +184,29 @@ test('adds a console root entry when the console is enabled', () => {
   const root = config.loggers.find((logger) => logger.category.length === 0)
   expect(root?.sinks).toEqual(['console'])
   expect(root?.lowestLevel).toBe('error')
-  expect(
-    config.loggers.some(
-      (logger) => Array.isArray(logger.category) && logger.category[1] === 'meta',
-    ),
-  ).toBe(false)
+  const meta = config.loggers.find(
+    (logger) => Array.isArray(logger.category) && logger.category[1] === 'meta',
+  )
+  expect(meta?.sinks).toEqual([])
+  expect(meta?.lowestLevel).toBe('error')
+})
+
+/**
+ * The case the root entry alone does not cover: at a console level below 'info', a root-only
+ * config lets logtape's own configure() notice ("configure the meta logger with a separate
+ * sink") through to stdout. The meta entry holds it at 'error' whatever the caller picked.
+ */
+test('pins the meta logger even at a console level below info', () => {
+  const config = createFileLogConfig({
+    app: APP,
+    files: [{ name: 'miss', category: [APP, 'miss'], dir }],
+    console: 'debug',
+  })
+  expect(config.loggers.find((logger) => logger.category.length === 0)?.lowestLevel).toBe('debug')
+  const meta = config.loggers.find(
+    (logger) => Array.isArray(logger.category) && logger.category[1] === 'meta',
+  )
+  expect(meta?.lowestLevel).toBe('error')
 })
 
 test('honors an explicit console level', () => {

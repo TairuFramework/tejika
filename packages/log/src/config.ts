@@ -77,13 +77,21 @@ export function createFileLogConfig(options: FileLogConfigOptions): FileLogConfi
 
   if (withConsole) {
     sinks.console = getConsoleSink()
-    // Mirrors @sozai/log's getDefaultConfig. logtape counts a `category: []` entry as
-    // configuring the meta logger, so its own records stay handled without a second entry.
-    loggers.push({
-      category: [],
-      lowestLevel: consoleLevel,
-      sinks: ['console'],
-    })
+    // Mirrors @sozai/log's getDefaultConfig, meta entry included. logtape counts a `category: []`
+    // entry as configuring the meta logger, but leaves that logger's own `lowestLevel` at 'trace',
+    // so with a `console` level below 'info' the root entry alone lets logtape's own configure()
+    // notice through. `consoleLevel` is the caller's to choose, so pin the meta logger separately.
+    // It names no sink on purpose: it inherits the console below and prints once, where a second
+    // 'console' entry would print every meta record twice ('inherit' unions sinks without
+    // de-duplicating by identity).
+    loggers.push(
+      {
+        category: [],
+        lowestLevel: consoleLevel,
+        sinks: ['console'],
+      },
+      { category: ['logtape', 'meta'], lowestLevel: 'error', sinks: [] },
+    )
   } else {
     // File-only: keep logtape's own meta records out of the app's log files.
     loggers.push({ category: ['logtape', 'meta'], lowestLevel: 'error', sinks: [] })

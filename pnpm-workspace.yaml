@@ -44,3 +44,10 @@ allowBuilds:
   '@swc/core': true
   esbuild: true
   node-pty: true
+
+publishBranch: main
+
+# Every package versions independently: no fixed groups, no lanes, no epics.
+versioning:
+  changelog:
+    storage: repository

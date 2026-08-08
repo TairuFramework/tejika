@@ -1,6 +1,19 @@
 {
   "name": "@tejika/server",
-  "version": "0.4.0",
+  "version": "0.4.1",
+  "description": "Local Hono HTTP server in loopback-private or network mode",
+  "keywords": [
+    "server",
+    "http",
+    "hono",
+    "loopback",
+    "local"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TairuFramework/tejika",
+    "directory": "packages/server"
+  },
   "license": "MIT",
   "sideEffects": false,
   "type": "module",
@@ -18,6 +31,7 @@
     "build:js": "swc src -d ./lib --config-file ../../node_modules/@kigu/dev/swc.json --strip-leading-paths",
     "build:types": "tsc --emitDeclarationOnly --skipLibCheck",
     "build:types:ci": "tsc --emitDeclarationOnly --skipLibCheck --declarationMap false",
+    "prepublishOnly": "pnpm run build",
     "test": "pnpm run test:types && pnpm run test:unit",
     "test:types": "tsc --noEmit --skipLibCheck -p tsconfig.test.json",
     "test:unit": "vitest run"
@@ -31,5 +45,8 @@
   },
   "devDependencies": {
     "@types/node": "catalog:"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

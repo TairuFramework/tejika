@@ -1,0 +1,24 @@
+"@tejika/cli@0.4.1":
+  dir: packages/cli
+  intents:
+    - lazy-seals-juggle
+"@tejika/env@0.5.0":
+  dir: packages/env
+  intents:
+    - violet-teams-jam
+"@tejika/process@0.5.0":
+  dir: packages/process
+  intents:
+    - early-zebras-lay
+"@tejika/server@0.4.1":
+  dir: packages/server
+  intents:
+    - lazy-seals-juggle
+"@tejika/test@0.4.1":
+  dir: packages/test
+  intents:
+    - lazy-seals-juggle
+"@tejika/ui@0.4.1":
+  dir: packages/ui
+  intents:
+    - lazy-seals-juggle

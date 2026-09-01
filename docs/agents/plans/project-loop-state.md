@@ -3,7 +3,7 @@
 | Activity | Last performed |
 |----------|---------------|
 | Triage | 2026-07-06 |
-| Review | 2026-07-02 (repo audit, see plans in `next/`) |
+| Review | 2026-09-01 (arch drift from lock migration + log/spawn work fixed; conventions clean) |
 | Roadmap | 2026-07-07 |
 
 Foundation + CLI packages complete (all five `@tejika/*` at 0.1.0). Current

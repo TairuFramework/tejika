@@ -9,8 +9,9 @@ apps that compose these packages.
 ## Packages
 
 - **`@tejika/env`** — deterministic local paths, ports, and env-var overrides
-  (`getDataDir`, `getStateDir`, `getSocketPath`, `getPIDPath`, `getPort`,
-  `parsePort`, `resolvePort`). The foundational concern with no `@tejika` deps.
+  (`getDataDir`, `getStateDir`, `getLogDir`, `getSocketPath`, `getPIDPath`,
+  `getLockPath`, `getPort`, `parsePort`, `resolvePort`, plus the `appEnvVar` /
+  `getAppEnvVar` override helpers). The foundational concern with no `@tejika` deps.
 - **`@tejika/log`** — local log files: `createFileSink` (a rotating `@logtape/file`
   sink under `getLogDir(app)`) and `createFileLogConfig` (a whole logtape `Config`
   built from a list of file targets). Both are pure builders — this package never
@@ -18,8 +19,8 @@ apps that compose these packages.
   `@sozai/log`'s (or its own) `setup()`. `@logtape/logtape` is a peer dependency, not
   a regular one, so the host controls the single logtape instance its process runs.
 - **`@tejika/process`** — local daemon lifecycle: detached spawn, foreground
-  bootstrap, pidfile/split-brain guard, and Enkaku client management with
-  reconnect backoff.
+  bootstrap, pidfile/split-brain guard (daemon locking via `@sozai/lock`), and
+  Enkaku client management with reconnect backoff.
 - **`@tejika/server`** — local Hono HTTP server, loopback-private by default
   (host/origin allowlists, bearer token) or opt-in `network` mode.
 - **`@tejika/cli`** — commander + Ink plumbing (`buildProgram`, `runInk`,
@@ -36,7 +37,7 @@ apps that compose these packages.
 ```
 @tejika/env       no @tejika deps (foundational)
 @tejika/log       env + @logtape/file (@logtape/logtape peer, no @sozai/log)
-@tejika/process   env + @enkaku/{socket,client,server} + nano-spawn
+@tejika/process   env + @enkaku/{socket,client,protocol,server} + @sozai/lock + nano-spawn
 @tejika/server    env + @enkaku/http-serve + hono + @hono/node-server + get-port
 @tejika/cli       commander, ink, react; env (default option values)
 @tejika/ui        ink, @inkjs/ui, react
@@ -50,8 +51,9 @@ devDependency.
 
 ## Key decision: depends on Enkaku directly
 
-Tejika depends on `@enkaku/*` (floor `^0.18`) directly rather than re-exporting or
-wrapping it. The local-process and HTTP-server packages use Enkaku transports and
+Tejika depends on `@enkaku/*` directly rather than re-exporting or wrapping it. The
+version floor lives in the workspace catalog (`pnpm-workspace.yaml`) — currently
+`@enkaku/* ^0.21`, `@sozai/* ^0.1` — and every package references it as `catalog:`. The local-process and HTTP-server packages use Enkaku transports and
 client/server as-is. Bugs in `@enkaku/*` are fixed at the Enkaku source repo, never
 worked around here.
 

@@ -1,7 +1,9 @@
 # Harden `@tejika/env` paths: XDG state dir, socket length, Windows, `getPIDPath` rename
 
-**Priority:** backlog (audit mediums — "as convenient"; port validation is split
-out into `next/2026-07-06-port-and-cli-option-validation.md`)
+**Priority:** next (promoted 2026-09-01 — the `getStateDir`→`getConfigDir` and `getPIDPath`
+renames are breaking, and cheapest to land before more consumers freeze onto the API ahead of the
+`publishing-readiness` work; port validation already shipped, see
+`completed/2026-07-13-port-and-cli-option-validation.complete.md`)
 **Origin:** repo audit 2026-07-02 (`@tejika/env` mediums/lows + the single
 conventions violation found repo-wide).
 **Where:** `packages/env/src/paths.ts`, `packages/env/src/ports.ts`, `packages/env/test/`; rename ripples into `@tejika/process`.

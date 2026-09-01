@@ -51,6 +51,42 @@ test('spawns a daemon and resolves once its socket accepts', { timeout: 30_000 }
   expect(record.pid).toBeGreaterThan(0)
 })
 
+// The embedded-runtime path (Electron's Node via `process.execPath` +
+// ELECTRON_RUN_AS_NODE). Here `process.execPath` is the node running vitest, so
+// an explicit override still boots a real daemon.
+test('runs the daemon under an explicit execPath', { timeout: 30_000 }, async () => {
+  await spawnDaemon({
+    app: APP,
+    entry: daemonEntry,
+    execPath: process.execPath,
+    socketPath,
+    pidPath,
+    logPath,
+    env,
+    timeoutMs: 20_000,
+  })
+  const record = JSON.parse(readFileSync(pidPath, 'utf8')) as { ready: boolean }
+  expect(record.ready).toBe(true)
+})
+
+// Proves the override actually drives the executable rather than being ignored:
+// a bogus execPath must fail. If `spawnDaemon` fell back to `node`, this would
+// boot successfully.
+test('a bogus execPath fails the boot', { timeout: 30_000 }, async () => {
+  const error = await spawnDaemon({
+    app: APP,
+    entry: daemonEntry,
+    execPath: '/nonexistent/bin/definitely-not-here',
+    socketPath,
+    pidPath,
+    logPath,
+    env,
+    timeoutMs: 20_000,
+  }).catch((err: unknown) => err)
+
+  expect(error).toBeInstanceOf(DaemonBootError)
+})
+
 test('surfaces a boot crash before the socket-wait timeout', { timeout: 30_000 }, async () => {
   const started = Date.now()
   const error = await spawnDaemon({

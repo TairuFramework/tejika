@@ -11,9 +11,14 @@ import { classifyState } from './status.js'
 
 export type SpawnDaemonOptions = {
   app: string
-  /** Entry script run with `node`. Always receives `--socket-path <path>` and `--pid-path <path>`. */
+  /**
+   * Entry script run with `execPath` (default `node`). Always receives
+   * `--socket-path <path>` and `--pid-path <path>`.
+   */
   entry: string
   args?: Array<string>
+  /** Executable used to run `entry`. Defaults to `'node'`. */
+  execPath?: string
   socketPath?: string
   pidPath?: string
   /** Defaults to `<logDir>/daemon.log`. */
@@ -74,7 +79,7 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
   if (opts.args != null) args.push(...opts.args)
 
   const logFD = openSync(logPath, 'a')
-  const subprocess = spawn('node', args, {
+  const subprocess = spawn(opts.execPath ?? 'node', args, {
     detached: true,
     stdio: ['ignore', logFD, logFD],
     env: opts.env,
@@ -103,7 +108,7 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
     const child = await subprocess.nodeChildProcess
     child.unref()
   } catch {
-    // The child never started at all — `node` could not be executed. Throwing the
+    // The child never started at all — the executable could not be run. Throwing the
     // raw errno from here would abandon `exited`, whose rejection nothing has
     // handled yet: an unhandled rejection, which is fatal in Node. `exited` already
     // carries this same failure as a `DaemonBootError`, so say nothing and let the

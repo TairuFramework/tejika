@@ -1,5 +1,8 @@
 export function appEnvVar(app: string, key: string): string {
-  const slug = app.toUpperCase().replace(/[^A-Z0-9]+/g, '_')
+  let slug = app.toUpperCase().replace(/[^A-Z0-9]+/g, '_')
+  if (/^[0-9]/.test(slug)) {
+    slug = `_${slug}`
+  }
   return `${slug}_${key}`
 }
 

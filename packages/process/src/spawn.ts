@@ -1,6 +1,6 @@
 import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { getLogDir, getPIDPath, getSocketPath } from '@tejika/env'
+import { getLogDir, getPIDPath, getSocketPath, isNamedPipe } from '@tejika/env'
 import spawn from 'nano-spawn'
 
 import { createDeadline, type Deadline } from './deadline.js'
@@ -73,7 +73,10 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
   // Owner-only, matching @tejika/log's createFileSink on the same directory: local logs
   // hold personal data, and whichever of the two runs first must not leave it wider.
   mkdirSync(dirname(logPath), { recursive: true, mode: 0o700 })
-  mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 })
+  // A named-pipe socket has no parent directory to create; `\\.\pipe\<name>` binds directly.
+  if (!isNamedPipe(socketPath)) {
+    mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 })
+  }
 
   const args = [opts.entry, '--socket-path', socketPath, '--pid-path', pidPath]
   if (opts.args != null) args.push(...opts.args)

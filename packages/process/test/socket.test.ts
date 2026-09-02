@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +6,13 @@ import { type ConnectSocketOptions, connectSocket } from '@enkaku/socket'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import { createDeadline } from '../src/deadline.js'
-import { type ConnectSocket, isSocketLive, probeSocket, waitForSocket } from '../src/socket.js'
+import {
+  type ConnectSocket,
+  isSocketLive,
+  probeSocket,
+  safeRemove,
+  waitForSocket,
+} from '../src/socket.js'
 
 let dir: string
 let socketPath: string
@@ -159,5 +165,24 @@ describe('waitForSocket', () => {
     })
     await expect(promise).rejects.not.toThrow(/Timed out waiting for socket/)
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+  })
+})
+
+describe('safeRemove', () => {
+  test('removes an existing socket file', () => {
+    const path = join(dir, 'gone.sock')
+    writeFileSync(path, '')
+    safeRemove(path)
+    expect(existsSync(path)).toBe(false)
+  })
+
+  test('tolerates a missing file', () => {
+    expect(() => safeRemove(join(dir, 'never-existed.sock'))).not.toThrow()
+  })
+
+  // On Windows a named pipe has no filesystem entry; safeRemove must not attempt an unlink
+  // (which would throw) and must be a silent no-op regardless of the current platform.
+  test('is a no-op for a named-pipe path', () => {
+    expect(() => safeRemove('\\\\.\\pipe\\myapp')).not.toThrow()
   })
 })

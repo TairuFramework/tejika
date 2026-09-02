@@ -9,10 +9,16 @@ function assertNoSeparator(value: string, label: string): void {
   }
 }
 
-// unix `sun_path`: 104 bytes on darwin, 108 on linux/other. An over-length bind fails
-// with a cryptic error, so surface it here with the limit and a remediation hint.
+/** Whether `path` is a Windows named pipe (`\\.\pipe\…` or `\\?\pipe\…`). */
+export function isNamedPipe(path: string): boolean {
+  return /^\\\\[.?]\\pipe\\/i.test(path)
+}
+
+// unix `sun_path` is a 104-byte array on darwin, 108 on linux/other, and it must hold the
+// terminating NUL — so the usable pathname is one byte shorter (103 / 107). An over-length
+// bind fails with a cryptic error, so surface it here with the limit and a remediation hint.
 function assertSocketPathLength(app: string, path: string): void {
-  const limit = process.platform === 'darwin' ? 104 : 108
+  const limit = process.platform === 'darwin' ? 103 : 107
   const bytes = Buffer.byteLength(path)
   if (bytes > limit) {
     throw new Error(
@@ -50,7 +56,8 @@ export function getLogDir(app: string): string {
  * override is a directory anchor: with a `name` the socket is derived from `dirname(override)`.
  * On win32 a `name` always yields `\\.\pipe\<name>`, ignoring any override. With no `name`,
  * the override is used verbatim on both platforms. `app`/`name` may not contain a path
- * separator or `..`. On POSIX an over-length path throws (`sun_path` is 104/108 bytes).
+ * separator or `..`. On POSIX an over-length path throws (`sun_path` holds 104/108 bytes
+ * including the NUL, so the usable pathname limit is 103/107).
  */
 export function getSocketPath(app: string, name?: string): string {
   assertNoSeparator(app, 'app')

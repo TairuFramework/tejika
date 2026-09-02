@@ -7,6 +7,7 @@ import {
   getPIDPath,
   getSocketPath,
   getStateDir,
+  isNamedPipe,
 } from '../src/paths.js'
 
 afterEach(() => {
@@ -143,7 +144,7 @@ describe('getSocketPath length guard', () => {
   test('throws when the resolved path exceeds the darwin limit', () => {
     setPlatform('darwin')
     process.env.MYAPP_SOCKET_PATH = `/tmp/${'x'.repeat(110)}.sock`
-    expect(() => getSocketPath('myapp')).toThrow(/exceeds darwin limit of 104/)
+    expect(() => getSocketPath('myapp')).toThrow(/exceeds darwin limit of 103/)
   })
   test('names the override variable in the hint', () => {
     setPlatform('darwin')
@@ -154,6 +155,34 @@ describe('getSocketPath length guard', () => {
     setPlatform('linux')
     process.env.MYAPP_SOCKET_PATH = '/run/app.sock'
     expect(getSocketPath('myapp')).toBe('/run/app.sock')
+  })
+  // `sun_path` holds the terminating NUL, so a path filling the whole 104-byte array leaves
+  // no room for it and fails to bind — the guard must reject at 104, not only above it.
+  test('rejects a path of exactly 104 bytes on darwin', () => {
+    setPlatform('darwin')
+    const path = `/tmp/${'x'.repeat(94)}.sock`
+    expect(Buffer.byteLength(path)).toBe(104)
+    process.env.MYAPP_SOCKET_PATH = path
+    expect(() => getSocketPath('myapp')).toThrow(/exceeds darwin limit of 103/)
+  })
+  test('allows a path of exactly 103 bytes on darwin', () => {
+    setPlatform('darwin')
+    const path = `/tmp/${'x'.repeat(93)}.sock`
+    expect(Buffer.byteLength(path)).toBe(103)
+    process.env.MYAPP_SOCKET_PATH = path
+    expect(getSocketPath('myapp')).toBe(path)
+  })
+})
+
+describe('isNamedPipe', () => {
+  test('recognizes a Windows named pipe path', () => {
+    expect(isNamedPipe('\\\\.\\pipe\\myapp')).toBe(true)
+  })
+  test('recognizes the `\\\\?\\pipe\\` form', () => {
+    expect(isNamedPipe('\\\\?\\pipe\\myapp')).toBe(true)
+  })
+  test('rejects a POSIX socket path', () => {
+    expect(isNamedPipe('/tmp/myapp.sock')).toBe(false)
   })
 })
 

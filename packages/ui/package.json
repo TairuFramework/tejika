@@ -18,12 +18,16 @@
   "sideEffects": false,
   "type": "module",
   "exports": {
-    ".": "./lib/index.js"
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    }
   },
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "files": [
-    "lib/*"
+    "lib/*",
+    "LICENSE"
   ],
   "scripts": {
     "build": "pnpm run build:clean && pnpm run build:js && pnpm run build:types",
@@ -31,19 +35,26 @@
     "build:js": "swc src -d ./lib --config-file ../../node_modules/@kigu/dev/swc.json --strip-leading-paths",
     "build:types": "tsc --emitDeclarationOnly --skipLibCheck",
     "build:types:ci": "tsc --emitDeclarationOnly --skipLibCheck --declarationMap false",
-    "prepublishOnly": "pnpm run build",
+    "prepack": "pnpm run build:clean && pnpm run build:js && pnpm run build:types:ci",
     "test": "pnpm run test:types && pnpm run test:unit",
     "test:types": "tsc --noEmit --skipLibCheck -p tsconfig.test.json",
     "test:unit": "vitest run"
   },
   "dependencies": {
-    "@inkjs/ui": "catalog:",
-    "ink": "catalog:",
-    "react": "catalog:"
+    "@inkjs/ui": "catalog:"
   },
   "devDependencies": {
     "@types/react": "catalog:",
-    "ink-testing-library": "catalog:"
+    "ink": "catalog:",
+    "ink-testing-library": "catalog:",
+    "react": "catalog:"
+  },
+  "peerDependencies": {
+    "ink": "^7.0.0",
+    "react": "^19.0.0"
+  },
+  "engines": {
+    "node": ">=24"
   },
   "publishConfig": {
     "access": "public"

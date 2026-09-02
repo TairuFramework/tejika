@@ -26,6 +26,11 @@ export function getDataDir(app: string): string {
   return getAppEnvVar(app, 'DATA_DIR') ?? envPaths(app, { suffix: '' }).data
 }
 
+/**
+ * Config directory (`envPaths(app).config`). `env-paths` has no state bucket, and its
+ * `log` bucket is `~/Library/Logs` on macOS rather than a state dir, so the pidfile
+ * lives here by design. Returns `<APP>_STATE_DIR` when set.
+ */
 export function getStateDir(app: string): string {
   return getAppEnvVar(app, 'STATE_DIR') ?? envPaths(app, { suffix: '' }).config
 }
@@ -39,6 +44,14 @@ export function getLogDir(app: string): string {
   return getAppEnvVar(app, 'LOG_DIR') ?? envPaths(app, { suffix: '' }).log
 }
 
+/**
+ * IPC endpoint for `app` (optionally a named sub-socket). On POSIX a `.sock` path under
+ * the data dir; on win32 a `\\.\pipe\<name>` named pipe. On POSIX the `<APP>_SOCKET_PATH`
+ * override is a directory anchor: with a `name` the socket is derived from `dirname(override)`.
+ * On win32 a `name` always yields `\\.\pipe\<name>`, ignoring any override. With no `name`,
+ * the override is used verbatim on both platforms. `app`/`name` may not contain a path
+ * separator or `..`. On POSIX an over-length path throws (`sun_path` is 104/108 bytes).
+ */
 export function getSocketPath(app: string, name?: string): string {
   assertNoSeparator(app, 'app')
   if (name != null) {

@@ -12,6 +12,9 @@ apps that compose these packages.
   (`getDataDir`, `getStateDir`, `getLogDir`, `getSocketPath`, `getPIDPath`,
   `getLockPath`, `getPort`, `parsePort`, `resolvePort`, plus the `appEnvVar` /
   `getAppEnvVar` override helpers). The foundational concern with no `@tejika` deps.
+  `@tejika/env` sockets are POSIX unix-domain `.sock` files (guarded against the
+  `sun_path` 104/108-byte limit) and Windows named pipes (`\\.\pipe\<name>`) —
+  `getSocketPath` branches on platform, so `@tejika/process` runs on both.
 - **`@tejika/log`** — local log files: `createFileSink` (a rotating `@logtape/file`
   sink under `getLogDir(app)`) and `createFileLogConfig` (a whole logtape `Config`
   built from a list of file targets). Both are pure builders — this package never

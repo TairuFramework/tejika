@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import envPaths from 'env-paths'
 
 import { appEnvVar, getAppEnvVar } from './env-var.js'
@@ -15,11 +15,12 @@ export function isNamedPipe(path: string): boolean {
   return /^\\\\[.?]\\pipe\\/i.test(path)
 }
 
-// unix `sun_path` is a 104-byte array on darwin, 108 on linux/other, and it must hold the
-// terminating NUL — so the usable pathname is one byte shorter (103 / 107). An over-length
-// bind fails with a cryptic error, so surface it here with the limit and a remediation hint.
+// unix `sun_path` is a 104-byte array on darwin and the BSDs, 108 on linux/other, and it
+// must hold the terminating NUL — so the usable pathname is one byte shorter (103 / 107). An
+// over-length bind fails with a cryptic error, so surface it here with the limit and a hint.
+const SHORT_SUN_PATH = new Set(['darwin', 'freebsd', 'openbsd', 'netbsd', 'dragonfly'])
 function assertSocketPathLength(app: string, path: string): void {
-  const limit = process.platform === 'darwin' ? 103 : 107
+  const limit = SHORT_SUN_PATH.has(process.platform) ? 103 : 107
   const bytes = Buffer.byteLength(path)
   if (bytes > limit) {
     throw new Error(
@@ -59,7 +60,10 @@ export function getLogDir(app: string): string {
  * share a pipe. Folding the resolved anchor in gives each its own.
  */
 function namedPipeFor(base: string, anchor: string): string {
-  const scope = createHash('sha256').update(anchor).digest('hex').slice(0, 12)
+  // Resolve to an absolute path before hashing: a relative `DATA_DIR`/override would
+  // otherwise hash identically from different working directories, collapsing two real
+  // profiles onto one machine-global pipe — the opposite of the scoping this provides.
+  const scope = createHash('sha256').update(resolve(anchor)).digest('hex').slice(0, 12)
   const path = `\\\\.\\pipe\\${base}-${scope}`
   // Windows caps the whole `\\.\pipe\<name>` string (prefix included) at 256 characters.
   // Surface an over-length path here rather than deferring to an opaque `listen()` failure;

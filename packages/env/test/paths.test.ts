@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
@@ -173,6 +174,14 @@ describe('getSocketPath length guard', () => {
     process.env.MYAPP_SOCKET_PATH = '/run/app.sock'
     expect(getSocketPath('myapp')).toBe('/run/app.sock')
   })
+  // The BSDs share darwin's 104-byte `sun_path` (103 usable), not linux's 108.
+  test('applies the 103-byte limit on freebsd', () => {
+    setPlatform('freebsd')
+    const path = `/tmp/${'x'.repeat(94)}.sock`
+    expect(Buffer.byteLength(path)).toBe(104)
+    process.env.MYAPP_SOCKET_PATH = path
+    expect(() => getSocketPath('myapp')).toThrow(/exceeds freebsd limit of 103/)
+  })
   // `sun_path` holds the terminating NUL, so a path filling the whole 104-byte array leaves
   // no room for it and fails to bind — the guard must reject at 104, not only above it.
   test('rejects a path of exactly 104 bytes on darwin', () => {
@@ -253,5 +262,20 @@ describe('getSocketPath on win32', () => {
     process.env.MYAPP_SOCKET_PATH = '/run/b/app.sock'
     const b = getSocketPath('myapp', 'monitor')
     expect(a).not.toBe(b)
+  })
+  // A relative override must resolve against the cwd before hashing, or the same
+  // relative path launched from two directories would collapse onto one pipe.
+  test('resolves a relative override so distinct working directories do not collide', () => {
+    process.env.MYAPP_SOCKET_PATH = 'rel/app.sock'
+    const original = process.cwd()
+    try {
+      process.chdir('/')
+      const a = getSocketPath('myapp', 'monitor')
+      process.chdir(tmpdir())
+      const b = getSocketPath('myapp', 'monitor')
+      expect(a).not.toBe(b)
+    } finally {
+      process.chdir(original)
+    }
   })
 })

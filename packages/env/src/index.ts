@@ -6,5 +6,6 @@ export {
   getPIDPath,
   getSocketPath,
   getStateDir,
+  isNamedPipe,
 } from './paths.js'
 export { type GetPortOptions, getPort, parsePort, resolvePort } from './ports.js'

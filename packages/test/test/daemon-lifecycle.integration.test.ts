@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { getSocketPath, isNamedPipe } from '@tejika/env'
 import { getDaemonStatus, stopDaemon } from '@tejika/process'
 import { expect, test } from 'vitest'
 
@@ -29,7 +30,13 @@ test('daemon lifecycle against an isolated profile', { timeout: 30_000 }, async 
   try {
     const pid = await waitForDaemonRunning({ pidPath, timeoutMs: 10_000 })
     expect(pid).toBe(child.pid)
-    expect(existsSync(join(profile.dir, `${APP}.sock`))).toBe(true)
+    // On Windows the daemon binds a named pipe, which has no filesystem entry —
+    // only a POSIX `.sock` is a real file. Readiness is already asserted by the
+    // running pid above and the stop/not-running checks below; the on-disk check
+    // is POSIX-only.
+    if (!isNamedPipe(getSocketPath(APP))) {
+      expect(existsSync(join(profile.dir, `${APP}.sock`))).toBe(true)
+    }
 
     await stopDaemon({ app: APP, pidPath })
     await waitForDaemonStopped({ pidPath })

@@ -1,5 +1,8 @@
 export function appEnvVar(app: string, key: string): string {
-  const slug = app.toUpperCase().replace(/[^A-Z0-9]+/g, '_')
+  let slug = app.toUpperCase().replace(/[^A-Z0-9]+/g, '_')
+  if (/^[0-9]/.test(slug)) {
+    slug = `_${slug}`
+  }
   return `${slug}_${key}`
 }
 
@@ -9,6 +12,7 @@ export function appEnvVar(app: string, key: string): string {
  * `MYAPP_DATA_DIR= node …` leaves the variable defined as `''`, which would slip
  * past a `?? fallback` (nullish coalescing only catches `null`/`undefined`). This
  * returns `undefined` in that case so callers fall back to their default.
+ * The returned value is trimmed of surrounding whitespace.
  */
 export function getAppEnvVar(app: string, key: string): string | undefined {
   const value = process.env[appEnvVar(app, key)]

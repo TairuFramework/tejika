@@ -1,0 +1,61 @@
+name: Test on platforms
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  DO_NOT_TRACK: 1
+
+jobs:
+  test:
+    name: on ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [24, 26]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup environment
+        uses: TairuFramework/kigu/setup@main
+        with:
+          node-version: ${{ matrix.node }}
+
+      # node-pty ships a prebuilt `spawn-helper` that pnpm's store hardlinks can
+      # strip the executable bit from, so its PTY spawn fails with
+      # "posix_spawnp failed" on macOS. Restore it before the tests run.
+      - name: Ensure node-pty spawn-helper is executable
+        if: runner.os != 'Windows'
+        run: find node_modules -type f -name spawn-helper -exec chmod +x {} +
+
+      # ubuntu/macOS run the whole suite.
+      - name: Unit tests
+        if: runner.os != 'Windows'
+        run: pnpm run test
+
+      # Windows runs only the packages whose code is Windows-ready. `@tejika/env`
+      # (this branch's deliverable) resolves and validates named-pipe paths on
+      # win32, and the non-socket packages pass. `@tejika/process` and
+      # `@tejika/test` are excluded: their daemon/socket/IPC layer is still
+      # POSIX-only (a `net` server binds a `.sock` file, which Windows rejects
+      # with EACCES — it listens only on `\\.\pipe\` names). Bringing that layer
+      # up on Windows named pipes is tracked in
+      # docs/agents/plans/backlog/2026-09-02-windows-daemon-ipc.md.
+      - name: Unit tests (Windows-ready packages)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: pnpm exec turbo run test --filter=!@tejika/process --filter=!@tejika/test

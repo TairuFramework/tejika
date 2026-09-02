@@ -10,7 +10,7 @@ import type {
 import type { Server } from '@enkaku/server'
 import { SocketTransport } from '@enkaku/socket'
 import { acquireFileLock, type FileLock } from '@sozai/lock'
-import { getPIDPath, getSocketPath } from '@tejika/env'
+import { getPIDPath, getSocketPath, isNamedPipe } from '@tejika/env'
 
 import { DaemonAlreadyRunningError } from './errors.js'
 import { isSocketLive, safeRemove } from './socket.js'
@@ -167,9 +167,13 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
   // booted and never closed. Aborting means "do not run" — say so before claiming anything.
   if (opts.signal?.aborted === true) throw opts.signal.reason
 
+  // A named pipe has no filesystem home — its parent dir, permission bits, and stale-file
+  // cleanup are all POSIX-only. `\\.\pipe\<name>` binds directly on Windows.
+  const socketOnDisk = !isNamedPipe(socketPath)
+
   // 0o700 before the bind: the socket is unreachable during the window between
   // listen() and chmod(), rather than briefly world-accessible.
-  mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 })
+  if (socketOnDisk) mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 })
   mkdirSync(dirname(pidPath), { recursive: true, mode: 0o700 })
 
   const lock = await acquireFileLock(lockPath, {
@@ -217,14 +221,17 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     // boot grace, a guess that failed both ways (too short: steal a slow booter's socket, a
     // split brain; too long: block a legitimate boot behind a corpse).
 
-    if (existsSync(socketPath)) {
+    // On POSIX the `existsSync` gate avoids probing a socket path nothing has bound. A named
+    // pipe has no such filesystem marker, so probe liveness directly — a live pipe still means
+    // a foreign daemon, but a dead one leaves nothing to unlink (the pipe is already gone).
+    if (!socketOnDisk || existsSync(socketPath)) {
       if (await isSocketLive(socketPath)) {
         // A foreign daemon holds the socket with no state file. We hold the mutex but its
         // socket is not ours to steal. Its pid is unknown, so the error carries none rather
         // than the old `-1` that a consumer passing `err.pid` to `process.kill` would fire.
         throw new DaemonAlreadyRunningError(undefined, socketPath)
       }
-      safeRemove(socketPath)
+      if (socketOnDisk) safeRemove(socketPath)
     }
 
     const claimed: DaemonState = {
@@ -244,7 +251,9 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
       server.listen(socketPath, () => {
-        chmodSync(socketPath, 0o600)
+        // Named-pipe access control is set at creation via Windows ACLs, not chmod; there is
+        // no filesystem node to chmod, and calling it would throw.
+        if (socketOnDisk) chmodSync(socketPath, 0o600)
         resolve()
       })
     })

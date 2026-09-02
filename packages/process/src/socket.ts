@@ -2,6 +2,7 @@ import { rmSync } from 'node:fs'
 import type { Socket } from 'node:net'
 import { setTimeout as delay } from 'node:timers/promises'
 import { type ConnectSocketOptions, connectSocket } from '@enkaku/socket'
+import { isNamedPipe } from '@tejika/env'
 
 import { createDeadline, type Deadline } from './deadline.js'
 
@@ -115,6 +116,9 @@ export async function waitForSocket(
 
 /** Remove a socket file, tolerating concurrent removal (ENOENT). */
 export function safeRemove(socketPath: string): void {
+  // Named pipes have no filesystem entry: they vanish when their server unbinds, so there is
+  // nothing to unlink and `rmSync` would fail. Nothing to do.
+  if (isNamedPipe(socketPath)) return
   try {
     rmSync(socketPath)
   } catch (err) {

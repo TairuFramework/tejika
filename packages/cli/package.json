@@ -49,6 +49,9 @@
     "@types/react": "catalog:",
     "strip-ansi": "catalog:"
   },
+  "engines": {
+    "node": ">=24"
+  },
   "publishConfig": {
     "access": "public"
   }

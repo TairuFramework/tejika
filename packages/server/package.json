@@ -23,7 +23,8 @@
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "files": [
-    "lib/*"
+    "lib/*",
+    "LICENSE"
   ],
   "scripts": {
     "build": "pnpm run build:clean && pnpm run build:js && pnpm run build:types",

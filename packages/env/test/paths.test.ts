@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import {
   getDataDir,
@@ -17,6 +17,19 @@ afterEach(() => {
   delete process.env.MYAPP_SOCKET_PATH
   delete process.env.MYAPP_PID_PATH
 })
+
+const realPlatform = process.platform
+const setPlatform = (value: string) =>
+  Object.defineProperty(process, 'platform', { value, configurable: true })
+const restorePlatform = () => setPlatform(realPlatform)
+
+// Pin a POSIX platform so `.sock`-shaped assertions are deterministic on the
+// Windows CI runner, where the real platform would yield named-pipe paths.
+// The win32 branch has its own dedicated `describe` below.
+const pinPosix = () => {
+  beforeEach(() => setPlatform('linux'))
+  afterEach(restorePlatform)
+}
 
 describe('getDataDir', () => {
   test('returns a deterministic per-app data dir', () => {
@@ -77,6 +90,7 @@ describe('getLockPath', () => {
 })
 
 describe('getSocketPath', () => {
+  pinPosix()
   test('derives a socket path under the data dir', () => {
     expect(getSocketPath('myapp')).toMatch(/myapp.*\.sock$/)
   })
@@ -105,6 +119,7 @@ describe('getSocketPath input sanitization', () => {
 })
 
 describe('empty override treated as unset', () => {
+  pinPosix()
   // `MYAPP_DATA_DIR= node …` defines the var as '' — must fall back, not return ''.
   test('getDataDir falls back when override is empty', () => {
     process.env.MYAPP_DATA_DIR = ''
@@ -125,6 +140,7 @@ describe('empty override treated as unset', () => {
 })
 
 describe('getSocketPath override + name', () => {
+  pinPosix()
   test('derives a named socket from the override directory', () => {
     process.env.MYAPP_SOCKET_PATH = '/run/app.sock'
     expect(getSocketPath('myapp', 'monitor')).toBe('/run/monitor.sock')
@@ -136,10 +152,7 @@ describe('getSocketPath override + name', () => {
 })
 
 describe('getSocketPath length guard', () => {
-  const realPlatform = process.platform
-  const setPlatform = (value: string) =>
-    Object.defineProperty(process, 'platform', { value, configurable: true })
-  afterEach(() => setPlatform(realPlatform))
+  afterEach(restorePlatform)
 
   test('throws when the resolved path exceeds the darwin limit', () => {
     setPlatform('darwin')
@@ -187,10 +200,7 @@ describe('isNamedPipe', () => {
 })
 
 describe('getSocketPath on win32', () => {
-  const realPlatform = process.platform
-  const setPlatform = (value: string) =>
-    Object.defineProperty(process, 'platform', { value, configurable: true })
-  afterEach(() => setPlatform(realPlatform))
+  afterEach(restorePlatform)
 
   test('returns an app-named pipe', () => {
     setPlatform('win32')

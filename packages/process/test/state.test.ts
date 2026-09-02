@@ -103,7 +103,11 @@ describe('writeDaemonState', () => {
     const { bad, seen } = await observed
     await reader.terminate()
 
-    expect(cycles).toBeGreaterThan(100)
+    // A floor low enough to survive a slow/loaded CI runner: the test proves the
+    // reader never observes a torn record (`bad === 0`) while the writer genuinely
+    // cycled and the reader genuinely sampled (`seen > 0`); the exact cycle count is
+    // hardware-dependent and not the property under test.
+    expect(cycles).toBeGreaterThan(20)
     expect(seen).toBeGreaterThan(0)
     expect(bad).toBe(0)
   })

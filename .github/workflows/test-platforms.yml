@@ -42,5 +42,20 @@ jobs:
         if: runner.os != 'Windows'
         run: find node_modules -type f -name spawn-helper -exec chmod +x {} +
 
+      # ubuntu/macOS run the whole suite.
       - name: Unit tests
+        if: runner.os != 'Windows'
         run: pnpm run test
+
+      # Windows runs only the packages whose code is Windows-ready. `@tejika/env`
+      # (this branch's deliverable) resolves and validates named-pipe paths on
+      # win32, and the non-socket packages pass. `@tejika/process` and
+      # `@tejika/test` are excluded: their daemon/socket/IPC layer is still
+      # POSIX-only (a `net` server binds a `.sock` file, which Windows rejects
+      # with EACCES — it listens only on `\\.\pipe\` names). Bringing that layer
+      # up on Windows named pipes is tracked in
+      # docs/agents/plans/backlog/2026-09-02-windows-daemon-ipc.md.
+      - name: Unit tests (Windows-ready packages)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: pnpm exec turbo run test --filter=!@tejika/process --filter=!@tejika/test

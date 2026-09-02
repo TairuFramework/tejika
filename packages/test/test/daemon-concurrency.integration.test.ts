@@ -4,20 +4,12 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { getDaemonStatus, stopDaemon } from '@tejika/process'
-import { test as baseTest, expect } from 'vitest'
+import { expect, test } from 'vitest'
 
 import { waitForDaemonStopped } from '../src/daemon.js'
 import { poll } from '../src/poll.js'
 import { createTestProfile } from '../src/profile.js'
 import { runCLI } from '../src/run.js'
-
-// Skipped on Windows: these race the detached `ensureDaemon` cold-start path,
-// but the daemon child does not yet come up on Windows (no pidfile is written)
-// and the enkaku client fails with TransportDisposed. Bringing the
-// @tejika/process daemon lifecycle + @enkaku IPC up on Windows named pipes is
-// tracked as a follow-up (see docs/agents/plans/backlog). env-paths' own
-// path/pipe handling is covered by the unit suites, which run on all platforms.
-const test = baseTest.skipIf(process.platform === 'win32')
 
 // Everything here races the public ensureDaemon() entry point across
 // SEPARATE OS PROCESSES — the actual production shape (two CLI invocations

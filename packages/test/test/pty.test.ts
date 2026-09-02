@@ -7,11 +7,7 @@ const fixture = fileURLToPath(new URL('./fixtures/pty-app.js', import.meta.url))
 
 const createDriver = () => new PTYDriver({ args: [fixture] })
 
-// Skipped on Windows: node-pty's conpty backend spawns a `conpty_console_list`
-// helper that throws an uncaught "AttachConsole failed" on the Windows Server
-// 2025 runner, crashing the whole vitest worker (an upstream node-pty/conpty
-// bug, not our code). PTY behavior stays covered on macOS and Linux.
-describe.skipIf(process.platform === 'win32')('PTYDriver', () => {
+describe('PTYDriver', () => {
   test('waitFor sees output with ANSI stripped', async () => {
     using driver = createDriver()
     expect(await driver.waitFor('ready')).toBe(true)

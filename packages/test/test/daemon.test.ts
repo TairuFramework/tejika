@@ -17,34 +17,25 @@ function makeDir(): string {
 }
 
 describe('waitForDaemonRunning', () => {
-  // Skipped on Windows: this case binds a real `net` server on a POSIX `.sock`
-  // filesystem path to stand in for a live daemon, but Windows `net` only
-  // listens on `\\.\pipe\` names (a `.sock` path yields EACCES). Validating the
-  // daemon probe over a Windows named pipe is part of the deferred Windows
-  // daemon-IPC port (see docs/agents/plans/backlog); the timeout/booting cases
-  // below, which need no live socket, still run on every platform.
-  test.skipIf(process.platform === 'win32')(
-    'resolves the pid once the pidfile names a live, running daemon',
-    async () => {
-      const dir = makeDir()
-      const pidPath = join(dir, 'app.pid')
-      const socketPath = join(dir, 'app.sock')
-      const server = createServer()
-      await new Promise<void>((resolve) => server.listen(socketPath, resolve))
-      try {
-        const record: DaemonState = {
-          pid: process.pid,
-          socketPath,
-          startedAt: Date.now(),
-          ready: true,
-        }
-        writeFileSync(pidPath, JSON.stringify(record), 'utf8')
-        await expect(waitForDaemonRunning({ pidPath, timeoutMs: 1_000 })).resolves.toBe(process.pid)
-      } finally {
-        server.close()
+  test('resolves the pid once the pidfile names a live, running daemon', async () => {
+    const dir = makeDir()
+    const pidPath = join(dir, 'app.pid')
+    const socketPath = join(dir, 'app.sock')
+    const server = createServer()
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve))
+    try {
+      const record: DaemonState = {
+        pid: process.pid,
+        socketPath,
+        startedAt: Date.now(),
+        ready: true,
       }
-    },
-  )
+      writeFileSync(pidPath, JSON.stringify(record), 'utf8')
+      await expect(waitForDaemonRunning({ pidPath, timeoutMs: 1_000 })).resolves.toBe(process.pid)
+    } finally {
+      server.close()
+    }
+  })
 
   test('does not resolve while the record only reports booting', async () => {
     const dir = makeDir()

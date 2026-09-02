@@ -66,19 +66,25 @@ The win32 code paths cannot run on macOS, so a cross-platform CI matrix
 (ubuntu/macos/windows × node 24/26) was added in
 `.github/workflows/test-platforms.yml` to exercise them on real runners.
 
-On that matrix, all unit suites — `@tejika/env` (path resolution, named-pipe
-strings, length guard, sanitization), `@tejika/process`, `@tejika/server`, and
-the rest — pass on Windows, macOS, and Linux, and the full suite passes on macOS
-and Linux. Getting there fixed several OS-portability issues in the tests
-themselves (platform-pinned `.sock` assertions, `node:path`-derived expectations
-for the Windows separator, a hardware-independent concurrency floor, and an
-absolute `process.execPath` for node-pty's Windows agent) plus a pnpm/node-pty
-`spawn-helper` exec-bit step on macOS. Two Windows gaps remain deferred: the
-node-pty conpty backend crashes its vitest worker on Windows Server 2025 (an
-upstream bug — the PTY-driven suites are skipped on win32), and the full
-daemon-lifecycle + Enkaku IPC stack does not yet run over Windows named pipes
-(the daemon-integration suites are skipped on win32). Neither is in the env-paths
-path code; both are tracked in the follow-on backlog.
+The full suite passes on macOS and Linux. On Windows the matrix runs the
+Windows-ready packages — `@tejika/env` (path resolution, named-pipe strings, the
+length guard, sanitization — this branch's deliverable), plus the non-socket
+packages `@tejika/server`, `@tejika/log`, `@tejika/ui`, and `@tejika/cli` — all
+green. Getting there fixed several OS-portability issues in the tests themselves
+(platform-pinned `.sock` assertions, `node:path`-derived expectations for the
+Windows separator, a hardware-independent concurrency floor, an absolute
+`process.execPath` for node-pty's Windows agent, and skipping node-pty's PTY
+suites on Windows, where its conpty backend crashes the vitest worker — an
+upstream bug) plus a pnpm/node-pty `spawn-helper` exec-bit step on macOS.
+
+`@tejika/process` and `@tejika/test` are excluded from the Windows leg: their
+daemon/socket/IPC layer is still POSIX-only. The tests bind a `net` server on a
+`.sock` file, which Windows rejects with `EACCES` (it listens only on
+`\\.\pipe\` names), and the detached daemon does not yet come up over a named
+pipe. So this branch makes `@tejika/env`'s path layer Windows-correct and gates
+`@tejika/process`'s filesystem-only socket steps on `isNamedPipe`, but running
+the daemon lifecycle and Enkaku IPC end to end over Windows named pipes is a
+distinct port — tracked in the follow-on backlog.
 
 ## Follow-on
 

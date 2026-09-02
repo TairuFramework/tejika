@@ -35,5 +35,12 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      # node-pty ships a prebuilt `spawn-helper` that pnpm's store hardlinks can
+      # strip the executable bit from, so its PTY spawn fails with
+      # "posix_spawnp failed" on macOS. Restore it before the tests run.
+      - name: Ensure node-pty spawn-helper is executable
+        if: runner.os != 'Windows'
+        run: find node_modules -type f -name spawn-helper -exec chmod +x {} +
+
       - name: Unit tests
         run: pnpm run test

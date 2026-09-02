@@ -1,5 +1,6 @@
+import { dirname, join } from 'node:path'
 import { Command } from 'commander'
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import { DEFAULT_LOG_LEVELS, withLogLevel, withPort, withSocketPath } from '../src/options.js'
 
@@ -7,6 +8,17 @@ afterEach(() => {
   delete process.env.MYAPP_PORT
   delete process.env.MYAPP_SOCKET_PATH
 })
+
+const realPlatform = process.platform
+const setPlatform = (value: string) =>
+  Object.defineProperty(process, 'platform', { value, configurable: true })
+
+// Pin a POSIX platform so `.sock`-shaped assertions are deterministic on the
+// Windows CI runner, where `getSocketPath` would otherwise yield named pipes.
+function pinPosix() {
+  beforeEach(() => setPlatform('linux'))
+  afterEach(() => setPlatform(realPlatform))
+}
 
 /** Build `parent [-p <port>] sub`, capturing what the subcommand action sees. */
 function programWithSubcommand(register: (cmd: Command) => void): {
@@ -121,6 +133,7 @@ describe('withPort', () => {
 })
 
 describe('withSocketPath', () => {
+  pinPosix()
   test('injects the env-resolved default when no flag is given', async () => {
     process.env.MYAPP_SOCKET_PATH = '/tmp/from-env.sock'
     const { program, seen } = programWithSubcommand((cmd) => withSocketPath(cmd, 'myapp'))
@@ -141,7 +154,9 @@ describe('withSocketPath', () => {
       withSocketPath(cmd, 'myapp', { name: 'worker' }),
     )
     await program.parseAsync(['sub'], { from: 'user' })
-    expect(seen().socketPath).toBe('/tmp/worker.sock')
+    // Derived with `node:path` `join`/`dirname`, which use the host OS separator
+    // regardless of the mocked platform — compute the expected value the same way.
+    expect(seen().socketPath).toBe(join(dirname('/tmp/from-env.sock'), 'worker.sock'))
   })
 
   test('a named socket resolves under the data dir when no override is set', async () => {
@@ -150,7 +165,7 @@ describe('withSocketPath', () => {
       withSocketPath(cmd, 'myapp', { name: 'worker' }),
     )
     await program.parseAsync(['sub'], { from: 'user' })
-    expect(seen().socketPath).toBe('/tmp/data/worker.sock')
+    expect(seen().socketPath).toBe(join('/tmp/data', 'worker.sock'))
     delete process.env.MYAPP_DATA_DIR
   })
 

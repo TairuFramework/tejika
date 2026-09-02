@@ -46,7 +46,11 @@ export class PTYDriver implements Disposable {
   #exit: PTYExit | null = null
 
   constructor(options: PTYDriverOptions) {
-    this.#pty = spawn(options.command ?? 'node', options.args, {
+    // `process.execPath` (an absolute path to the running node) rather than bare
+    // `'node'`: node-pty's Windows agent does not search `PATH` and throws
+    // "File not found" for an unqualified command, so a bare name only works on
+    // POSIX. The absolute path is correct on every platform.
+    this.#pty = spawn(options.command ?? process.execPath, options.args, {
       name: options.name ?? 'xterm-color',
       cols: options.cols ?? 100,
       rows: options.rows ?? 30,

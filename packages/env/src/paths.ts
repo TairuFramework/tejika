@@ -3,6 +3,12 @@ import envPaths from 'env-paths'
 
 import { getAppEnvVar } from './env-var.js'
 
+function assertNoSeparator(value: string, label: string): void {
+  if (/[/\\]/.test(value) || value === '..') {
+    throw new Error(`${label} must not contain a path separator or "..": "${value}"`)
+  }
+}
+
 export function getDataDir(app: string): string {
   return getAppEnvVar(app, 'DATA_DIR') ?? envPaths(app, { suffix: '' }).data
 }
@@ -21,6 +27,10 @@ export function getLogDir(app: string): string {
 }
 
 export function getSocketPath(app: string, name?: string): string {
+  assertNoSeparator(app, 'app')
+  if (name != null) {
+    assertNoSeparator(name, 'name')
+  }
   const override = getAppEnvVar(app, 'SOCKET_PATH')
   if (override != null && name == null) return override
   const file = name == null ? `${app}.sock` : `${name}.sock`

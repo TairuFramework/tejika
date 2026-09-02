@@ -88,6 +88,21 @@ describe('getSocketPath', () => {
   })
 })
 
+describe('getSocketPath input sanitization', () => {
+  test('rejects a slash in name', () => {
+    expect(() => getSocketPath('myapp', 'a/b')).toThrow(/path separator/)
+  })
+  test('rejects a backslash in name', () => {
+    expect(() => getSocketPath('myapp', 'a\\b')).toThrow(/path separator/)
+  })
+  test('rejects a ".." name', () => {
+    expect(() => getSocketPath('myapp', '..')).toThrow(/path separator|\.\./)
+  })
+  test('rejects a slash in app', () => {
+    expect(() => getSocketPath('my/app')).toThrow(/path separator/)
+  })
+})
+
 describe('empty override treated as unset', () => {
   // `MYAPP_DATA_DIR= node …` defines the var as '' — must fall back, not return ''.
   test('getDataDir falls back when override is empty', () => {

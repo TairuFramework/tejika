@@ -42,15 +42,19 @@
   },
   "dependencies": {
     "@tejika/env": "workspace:^",
-    "commander": "catalog:",
-    "ink": "catalog:",
-    "react": "catalog:"
+    "commander": "catalog:"
   },
   "devDependencies": {
     "@tejika/test": "workspace:^",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
+    "ink": "catalog:",
+    "react": "catalog:",
     "strip-ansi": "catalog:"
+  },
+  "peerDependencies": {
+    "ink": "^7.0.0",
+    "react": "^19.0.0"
   },
   "engines": {
     "node": ">=24"

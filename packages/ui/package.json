@@ -41,13 +41,17 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
-    "@inkjs/ui": "catalog:",
-    "ink": "catalog:",
-    "react": "catalog:"
+    "@inkjs/ui": "catalog:"
   },
   "devDependencies": {
     "@types/react": "catalog:",
-    "ink-testing-library": "catalog:"
+    "ink": "catalog:",
+    "ink-testing-library": "catalog:",
+    "react": "catalog:"
+  },
+  "peerDependencies": {
+    "ink": "^7.0.0",
+    "react": "^19.0.0"
   },
   "engines": {
     "node": ">=24"

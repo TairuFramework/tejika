@@ -89,12 +89,6 @@ importers:
       commander:
         specifier: 'catalog:'
         version: 15.0.0
-      ink:
-        specifier: 'catalog:'
-        version: 7.1.1(@types/react@19.2.18)(react@19.2.8)
-      react:
-        specifier: 'catalog:'
-        version: 19.2.8
     devDependencies:
       '@tejika/test':
         specifier: workspace:^
@@ -105,6 +99,12 @@ importers:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.18
+      ink:
+        specifier: 'catalog:'
+        version: 7.1.1(@types/react@19.2.18)(react@19.2.8)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.8
       strip-ansi:
         specifier: 'catalog:'
         version: 7.2.0
@@ -215,19 +215,19 @@ importers:
       '@inkjs/ui':
         specifier: 'catalog:'
         version: 2.0.0(ink@7.1.1(@types/react@19.2.18)(react@19.2.8))
-      ink:
-        specifier: 'catalog:'
-        version: 7.1.1(@types/react@19.2.18)(react@19.2.8)
-      react:
-        specifier: 'catalog:'
-        version: 19.2.8
     devDependencies:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.18
+      ink:
+        specifier: 'catalog:'
+        version: 7.1.1(@types/react@19.2.18)(react@19.2.8)
       ink-testing-library:
         specifier: 'catalog:'
         version: 4.0.0(@types/react@19.2.18)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.8
 
 packages:
 

@@ -1,9 +1,15 @@
 import { fileURLToPath } from 'node:url'
 import { PTYDriver } from '@tejika/test'
-import { expect, test } from 'vitest'
+import { test as baseTest, expect } from 'vitest'
 
 const fixture = fileURLToPath(new URL('./fixtures/ink-app.js', import.meta.url))
 const staticFixture = fileURLToPath(new URL('./fixtures/ink-static.js', import.meta.url))
+
+// Skipped on Windows: node-pty's conpty backend spawns a `conpty_console_list`
+// helper that throws an uncaught "AttachConsole failed" on the Windows Server
+// 2025 runner, crashing the whole vitest worker (an upstream node-pty/conpty
+// bug, not our code). The PTY path stays covered on macOS and Linux.
+const test = baseTest.skipIf(process.platform === 'win32')
 
 // runInk needs a real TTY (Ink calls setRawMode); PTYDriver provides one.
 test('runInk renders and handles input under a real PTY', { timeout: 30_000 }, async () => {

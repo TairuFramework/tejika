@@ -227,9 +227,12 @@ describe('getSocketPath on win32', () => {
       new RegExp(`^\\\\\\\\\\.\\\\pipe\\\\${'x'.repeat(200)}-[0-9a-f]{12}$`),
     )
   })
-  test('rejects a pipe name over the Windows 256-character limit', () => {
-    // 256 - 13 (the `-` plus the 12-char hash) = 243 is the longest base that fits.
-    expect(() => getSocketPath('myapp', 'x'.repeat(244))).toThrow(
+  test('rejects a pipe path over the Windows 256-character limit', () => {
+    // Full path = `\\.\pipe\` (9) + base + `-` + 12-char hash. 256 - 9 - 13 = 234 is the
+    // longest base that fits; 235 overflows only when the prefix is counted, so it guards
+    // against dropping the prefix from the check.
+    expect(getSocketPath('myapp', 'x'.repeat(234))).toHaveLength(256)
+    expect(() => getSocketPath('myapp', 'x'.repeat(235))).toThrow(
       /exceeds the Windows limit of 256/,
     )
   })

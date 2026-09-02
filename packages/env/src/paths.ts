@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import envPaths from 'env-paths'
 
 import { getAppEnvVar } from './env-var.js'
@@ -32,7 +32,9 @@ export function getSocketPath(app: string, name?: string): string {
     assertNoSeparator(name, 'name')
   }
   const override = getAppEnvVar(app, 'SOCKET_PATH')
-  if (override != null && name == null) return override
+  if (override != null) {
+    return name == null ? override : join(dirname(override), `${name}.sock`)
+  }
   const file = name == null ? `${app}.sock` : `${name}.sock`
   return join(getDataDir(app), file)
 }

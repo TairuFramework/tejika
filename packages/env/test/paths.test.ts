@@ -122,3 +122,14 @@ describe('empty override treated as unset', () => {
     expect(getPIDPath('myapp')).toMatch(/myapp.*\.pid$/)
   })
 })
+
+describe('getSocketPath override + name', () => {
+  test('derives a named socket from the override directory', () => {
+    process.env.MYAPP_SOCKET_PATH = '/run/app.sock'
+    expect(getSocketPath('myapp', 'monitor')).toBe('/run/monitor.sock')
+  })
+  test('override with no name is used verbatim', () => {
+    process.env.MYAPP_SOCKET_PATH = '/run/app.sock'
+    expect(getSocketPath('myapp')).toBe('/run/app.sock')
+  })
+})

@@ -39,15 +39,19 @@ A library that renders the consumer's React elements must not pin its own
 hook call", broken Ink instance identity).
 
 - `packages/cli/package.json`: move `react` and `ink` out of `dependencies`
-  into `peerDependencies` (`catalog:`), and add both to `devDependencies`
-  (`catalog:`) so local build and tests still resolve.
+  into `peerDependencies`, and add both to `devDependencies` (`catalog:`) so
+  local build and tests still resolve.
 - `packages/ui/package.json`: same move for `react` and `ink`. `@inkjs/ui`
   stays a regular `dependency`.
 
-`catalog:` in `peerDependencies` is already proven in this repo —
-`packages/log/package.json` declares `@logtape/logtape` as a `catalog:` peer.
-The catalog ranges (`react: ^19.2.8`, `ink: ^7.1.1`) become the published peer
-ranges.
+**Peer ranges are widened to the major floor, decoupled from the dev catalog:**
+`"react": "^19.0.0"`, `"ink": "^7.0.0"`. The catalog pins the *tested* dev
+versions (`react ^19.2.8`, `ink ^7.1.1`); a published peer should not reject an
+otherwise-compatible React 19 / Ink 7 consumer over a patch floor. There is no
+evidence the public API needs a version above the major floor, so the peer is
+`^19` / `^7`. (`catalog:` *is* valid in `peerDependencies` — proven by
+`packages/log`'s `@logtape/logtape` peer — but here we deliberately use explicit
+wider ranges rather than the catalog value; the devDependencies keep `catalog:`.)
 
 ### 2. LICENSE — H5
 
@@ -56,12 +60,15 @@ published tarballs currently ship no license text.
 
 - Add a canonical `LICENSE` at the repo root: MIT, copyright holder
   "Paul Le Cam", year 2026.
-- Commit a copy of that `LICENSE` into each of the seven package directories.
-  npm/pnpm only pack a license file that lives in the package's own directory,
-  not one at the workspace root.
-- Append `"LICENSE"` to each package's `files` array (currently `["lib/*"]`).
+- Commit a copy of that `LICENSE` into each of the seven package directories,
+  and append `"LICENSE"` to each package's `files` array (currently `["lib/*"]`).
 
-The seven copies are static MIT text; drift is not a practical concern.
+pnpm 11 does auto-copy the workspace-root `LICENSE` into a package that lacks its
+own during `pnpm publish`, so the copies are not strictly required for the pnpm
+release path. We commit them anyway as an explicit, tool-independent policy: the
+tarball carries the license regardless of publisher (`npm pack`, `pnpm pack`, or
+`pnpm publish`), which is what the acceptance check exercises. The seven copies
+are static MIT text; drift is not a practical concern.
 
 ### 3. `engines.node` — Medium
 
@@ -86,26 +93,37 @@ separate top-level `types`. This resolves today under NodeNext via sibling
 Keep the top-level `main` and `types` fields as a legacy-resolver fallback.
 Verify each package with `pnpm dlx publint`.
 
-### 5. No-map publish build — Low
+### 5. No-map pack/publish build — Low
 
 Plain `build` runs `build:types` (with `declarationMap`), so `files: ["lib/*"]`
 ships `.d.ts.map` files that reference `../src`, which is not published — dangling
 maps. The `build:types:ci` variant (`--declarationMap false`) already exists.
 
-- In each package's `prepublishOnly`, run the no-map types step instead of the
-  mapped one, so the final pre-pack build carries no `.d.ts.map`.
-- Point the root `release` script's build at `build:ci`.
+Two subtleties (surfaced in review):
+- `pnpm pack` does **not** run `prepublishOnly` — pnpm runs only `prepack`,
+  `prepare`, and `postpack` for pack. `pnpm publish` runs `prepack` too. So the
+  clean build must hang off `prepack`, not `prepublishOnly`, to cover both.
+- `--declarationMap false` only stops *new* maps being emitted; it does not
+  delete a stale `.d.ts.map` from an earlier mapped build. The `build:clean`
+  (`del lib`) step is what removes them.
 
-`prepublishOnly` runs during `pnpm publish -r`, so it is the authoritative build
-before packing; fixing it there is sufficient.
+Therefore, in each of the seven packages replace `prepublishOnly` with:
+
+```json
+"prepack": "pnpm run build:clean && pnpm run build:js && pnpm run build:types:ci"
+```
+
+so both `pnpm pack` and `pnpm publish -r` produce an identical clean, no-map
+tarball. Point the root `release` script's build at `build:ci` for consistency.
 
 ### 6. Record release intents — release prep
 
-Record `pnpm change` intents so the next release captures this work:
-
-- minor bump for `@tejika/cli` and `@tejika/ui` (the peer-dependency move),
-- patch bump for `env`, `log`, `process`, `server`, `test` (metadata/LICENSE/
-  engines only).
+Record `pnpm change` intents so the next release captures this work. **All seven
+get a minor bump:** every package gains `engines.node >=24`, which raises the
+runtime floor — a consumer on an older Node can no longer install — so for
+pre-1.0 packages that is a minor, not a patch (per review). `cli` and `ui` also
+carry the peer-dependency move, likewise a minor. There is no per-package reason
+to treat the floor change as a patch here.
 
 Performing the actual release stays out of scope (manual, `kigu:releasing`).
 

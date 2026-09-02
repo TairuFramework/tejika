@@ -1,11 +1,24 @@
 import { dirname, join } from 'node:path'
 import envPaths from 'env-paths'
 
-import { getAppEnvVar } from './env-var.js'
+import { appEnvVar, getAppEnvVar } from './env-var.js'
 
 function assertNoSeparator(value: string, label: string): void {
   if (/[/\\]/.test(value) || value === '..') {
     throw new Error(`${label} must not contain a path separator or "..": "${value}"`)
+  }
+}
+
+// unix `sun_path`: 104 bytes on darwin, 108 on linux/other. An over-length bind fails
+// with a cryptic error, so surface it here with the limit and a remediation hint.
+function assertSocketPathLength(app: string, path: string): void {
+  const limit = process.platform === 'darwin' ? 104 : 108
+  const bytes = Buffer.byteLength(path)
+  if (bytes > limit) {
+    throw new Error(
+      `socket path ${bytes} bytes exceeds ${process.platform} limit of ${limit}: ${path}. ` +
+        `Set ${appEnvVar(app, 'SOCKET_PATH')} to a shorter path.`,
+    )
   }
 }
 
@@ -32,11 +45,14 @@ export function getSocketPath(app: string, name?: string): string {
     assertNoSeparator(name, 'name')
   }
   const override = getAppEnvVar(app, 'SOCKET_PATH')
+  let path: string
   if (override != null) {
-    return name == null ? override : join(dirname(override), `${name}.sock`)
+    path = name == null ? override : join(dirname(override), `${name}.sock`)
+  } else {
+    path = join(getDataDir(app), name == null ? `${app}.sock` : `${name}.sock`)
   }
-  const file = name == null ? `${app}.sock` : `${name}.sock`
-  return join(getDataDir(app), file)
+  assertSocketPathLength(app, path)
+  return path
 }
 
 export function getPIDPath(app: string): string {

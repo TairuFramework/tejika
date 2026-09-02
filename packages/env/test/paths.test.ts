@@ -133,3 +133,26 @@ describe('getSocketPath override + name', () => {
     expect(getSocketPath('myapp')).toBe('/run/app.sock')
   })
 })
+
+describe('getSocketPath length guard', () => {
+  const realPlatform = process.platform
+  const setPlatform = (value: string) =>
+    Object.defineProperty(process, 'platform', { value, configurable: true })
+  afterEach(() => setPlatform(realPlatform))
+
+  test('throws when the resolved path exceeds the darwin limit', () => {
+    setPlatform('darwin')
+    process.env.MYAPP_SOCKET_PATH = `/tmp/${'x'.repeat(110)}.sock`
+    expect(() => getSocketPath('myapp')).toThrow(/exceeds darwin limit of 104/)
+  })
+  test('names the override variable in the hint', () => {
+    setPlatform('darwin')
+    process.env.MYAPP_SOCKET_PATH = `/tmp/${'x'.repeat(110)}.sock`
+    expect(() => getSocketPath('myapp')).toThrow(/MYAPP_SOCKET_PATH/)
+  })
+  test('allows a short path on linux', () => {
+    setPlatform('linux')
+    process.env.MYAPP_SOCKET_PATH = '/run/app.sock'
+    expect(getSocketPath('myapp')).toBe('/run/app.sock')
+  })
+})

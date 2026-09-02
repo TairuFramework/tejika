@@ -1,3 +1,4 @@
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import {
@@ -143,7 +144,10 @@ describe('getSocketPath override + name', () => {
   pinPosix()
   test('derives a named socket from the override directory', () => {
     process.env.MYAPP_SOCKET_PATH = '/run/app.sock'
-    expect(getSocketPath('myapp', 'monitor')).toBe('/run/monitor.sock')
+    // `getSocketPath` derives via `node:path` `join`/`dirname`, which use the host
+    // OS separator (`\` on the Windows runner) regardless of the mocked platform —
+    // so compute the expected value the same way rather than hard-coding `/`.
+    expect(getSocketPath('myapp', 'monitor')).toBe(join(dirname('/run/app.sock'), 'monitor.sock'))
   })
   test('override with no name is used verbatim', () => {
     process.env.MYAPP_SOCKET_PATH = '/run/app.sock'

@@ -36,13 +36,6 @@ Because the failure is the whole package's socket model rather than a handful of
 cases, the fix is a real port, not per-test skips — the packages are excluded
 wholesale from the Windows CI leg (above) until the port lands.
 
-## Also flaky (unrelated to Windows)
-
-`@tejika/process` `controller.test.ts` → "two concurrent cold starts with a
-defaulted pidPath both get a working client" fails intermittently on macOS/Linux
-(observed: the state file did not yet contain `"ready":true` when asserted) — a
-timing race in the test, worth hardening independently of the Windows port.
-
 ## Work to do
 
 1. **Detached daemon spawn on Windows.** Determine why the `ensureDaemon`-spawned
@@ -54,11 +47,21 @@ timing race in the test, worth hardening independently of the Windows port.
    server transports connect over a `\\.\pipe\<name>` address. If they do not,
    fix it at the Enkaku source repo (per the project guardrail: never work
    around `@enkaku/*` bugs here) and raise the version floor once released.
-3. **Harness socket paths.** Make the `@tejika/process` and `@tejika/test` daemon
+3. **Owner-only access for the pipe (security).** On POSIX the daemon `chmod`s its
+   socket to `0o600`; `@tejika/process` skips that for named pipes. But
+   `net.Server.listen(pipe)` gives the pipe the process token's default ACL, which
+   on a multi-user machine can grant other local users access — the hash in the
+   pipe name prevents accidental collisions but is not authorization. Create the
+   pipe with an explicitly restricted security descriptor (owner-only), or
+   authenticate clients before treating Windows IPC as private. Node's `net` API
+   exposes no ACL option, so this needs a native/`@enkaku` change rather than a
+   tweak in `@tejika/process` — the reason it is deferred with the rest of the
+   port rather than patched onto the current branch.
+4. **Harness socket paths.** Make the `@tejika/process` and `@tejika/test` daemon
    tests and helpers use a platform-appropriate socket path — a `\\.\pipe\` name
    on Windows (e.g. via `getSocketPath` rather than a hard-coded `.sock`) — so the
    bind/probe/liveness paths are exercised there too.
-4. **Re-include the packages on Windows** by dropping the
+5. **Re-include the packages on Windows** by dropping the
    `--filter=!@tejika/process --filter=!@tejika/test` exclusion in
    `.github/workflows/test-platforms.yml`, and confirm the full matrix is green.
 

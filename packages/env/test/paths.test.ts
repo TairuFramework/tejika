@@ -227,6 +227,12 @@ describe('getSocketPath on win32', () => {
       new RegExp(`^\\\\\\\\\\.\\\\pipe\\\\${'x'.repeat(200)}-[0-9a-f]{12}$`),
     )
   })
+  test('rejects a pipe name over the Windows 256-character limit', () => {
+    // 256 - 13 (the `-` plus the 12-char hash) = 243 is the longest base that fits.
+    expect(() => getSocketPath('myapp', 'x'.repeat(244))).toThrow(
+      /exceeds the Windows limit of 256/,
+    )
+  })
   // Named pipes are machine-global: distinct profiles/users must not resolve to the
   // same pipe just because they share an app or socket name.
   test('scopes the pipe name to the data dir so distinct profiles do not collide', () => {

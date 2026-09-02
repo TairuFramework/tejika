@@ -60,7 +60,17 @@ export function getLogDir(app: string): string {
  */
 function namedPipeFor(base: string, anchor: string): string {
   const scope = createHash('sha256').update(anchor).digest('hex').slice(0, 12)
-  return `\\\\.\\pipe\\${base}-${scope}`
+  const name = `${base}-${scope}`
+  // Windows caps a pipe name (the part after `\\.\pipe\`) at 256 characters. Surface an
+  // over-length name here rather than deferring to an opaque `listen()` failure; only the
+  // `base` (the app or socket name) is variable, since the hash is a fixed 12 chars.
+  if (name.length > 256) {
+    throw new Error(
+      `named pipe name ${name.length} characters exceeds the Windows limit of 256: ${name}. ` +
+        'Use a shorter app or socket name.',
+    )
+  }
+  return `\\\\.\\pipe\\${name}`
 }
 
 /**

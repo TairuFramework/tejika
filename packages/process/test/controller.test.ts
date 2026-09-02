@@ -168,8 +168,12 @@ test('two concurrent cold starts with a defaulted pidPath both get a working cli
 
   // The parent must have handed the child the path it defaulted to, rather than
   // letting the child resolve its own: a divergent `env` would otherwise give
-  // parent and child two different lockfiles.
-  expect(readFileSync(pidPath, 'utf8')).toContain('"ready":true')
+  // parent and child two different lockfiles. Poll rather than read once: a
+  // client resolves as soon as the socket accepts, but the daemon flips the
+  // pidfile to `ready: true` a beat later, so a single read races that write.
+  await expect
+    .poll(() => readFileSync(pidPath, 'utf8'), { timeout: 5_000 })
+    .toContain('"ready":true')
 
   const disposals: Array<Promise<void>> = []
   for (const client of clients) {

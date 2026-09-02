@@ -36,13 +36,20 @@ this work, not re-implemented:
 
 `.githooks/pre-commit` has two defects:
 
-- **L6** runs `pnpm biome check --write --staged` but never re-stages the files
-  Biome rewrites, so a commit ships pre-fix content with the fixes left
-  unstaged in the working tree. Re-stage after the autofix (`git add` the
-  staged set) so the commit contains the fixed content, or fail loudly if the
-  autofix changed anything. Chosen approach: re-stage — run the fix, then
-  `git add -u` the paths that were already staged, so the commit is
-  self-consistent and the hook stays non-blocking for autofixable issues.
+- **L6** runs `pnpm biome check --write --staged`, which rewrites files in the
+  working tree but never re-stages them, so a commit ships pre-fix content with
+  the fixes left unstaged. A naive re-stage (`git add -u` the staged paths) is
+  **rejected**: `git add -u <path>` stages the file's entire working-tree
+  version, so for a partially-staged file it would silently sweep in unstaged
+  hunks the author deliberately excluded. Index-preserving re-staging (formatting
+  only the staged blob, or stashing unstaged hunks around the fix) is fragile in
+  a POSIX `sh` hook. Chosen approach: **make the hook non-mutating and
+  fail-loud**, exactly mirroring CI. Run `pnpm biome check --staged
+  --no-errors-on-unmatched` (no `--write`); on non-zero exit, print
+  `Lint failed — run \`pnpm lint\` to fix, then re-stage.` and `exit 1`. The
+  author fixes and re-stages explicitly; the hook never edits the index. This
+  also removes the wrapper ambiguity — the hook calls `pnpm biome` directly, not
+  `pnpm run`, so the `rtk` shim is not involved.
 - **L13** runs `pnpm run build:types`, which emits declaration files into
   `lib/` (mutating, slow) purely as a type-check. Replace with the non-emitting
   per-package type-check: `pnpm -r run test:types` (each package's
@@ -68,19 +75,34 @@ Current `turbo.json`:
 - **Dead `^clean` dependency.** No package defines a `clean` script (they define
   `build:clean`, `del lib`), and the `clean` task body is empty. `build:js`'s
   `dependsOn: ["^clean"]` is therefore a no-op that only adds a phantom node to
-  the graph. Remove the dead `clean` task and the `^clean` dependency — each
-  package's own `build:js` already runs against a fresh `swc` output directory,
-  and pack/publish integrity is handled by `prepack`'s `build:clean`
-  (established in the publishing-readiness work). Turbo does not need to model
-  cleaning.
-- **Missing `inputs`.** `build:js` has no `inputs` filter, so unrelated changes
-  invalidate its cache. Add `inputs` scoped to each package's sources and swc
-  config (`src/**`, `tsconfig*.json`, and the shared `swc.json`/`tsconfig`
-  inputs via `$TURBO_DEFAULT$`) so the cache is correct and useful.
-- **Type-check task modeled.** Add a `test:types` task (`cache: false` or
-  inputs-scoped) so `turbo run test:types` is available as the repo-wide
-  type gate, matching the per-package `test:types` script. Keep `test`'s
-  existing `dependsOn: ["^build:js"]`.
+  the graph. Remove the dead `clean` task and the `^clean` dependency. This is
+  **behaviour-neutral**: the dependency resolves to nothing today, so nothing
+  currently cleans before a turbo `build:js` anyway. Note the pre-existing
+  limitation this exposes rather than fixes — a plain `build:js` (`swc src -d
+  lib`) does **not** empty `lib/` first, so a renamed or deleted source file can
+  leave a stale `.js` behind, which local subprocess tests could pick up.
+  Pack/publish integrity is already protected (`prepack` runs `build:clean`
+  first, from the publishing-readiness work), and a full `pnpm build` per
+  package runs `build:clean`. Wiring a real clean-before-build into the turbo
+  graph is **out of scope** here (it would re-run swc from scratch on every
+  build); this item only removes the dead node.
+- **Missing `inputs`.** `build:js` has no `inputs`, so turbo's default hashes
+  every file in the package plus the global deps — correct but over-invalidating
+  (a README edit rebuilds). Adding `$TURBO_DEFAULT$` would **not** narrow this
+  (it expands to exactly that full-package default), so specify concrete globs
+  instead: `["src/**", "package.json", "tsconfig*.json",
+  "$TURBO_ROOT$/tsconfig.build.json"]`. The shared `@kigu/dev` swc config and
+  preset version live under `node_modules` and are captured by turbo's global
+  hash (root `package.json` + `pnpm-lock.yaml`), not by per-task inputs — do not
+  claim a per-task glob covers them. Verify the resulting input set with
+  `turbo run build:js --dry=json` (inspect each task's `inputs`/hash) before
+  accepting.
+- **Type-check task modeled.** Add a `test:types` task with **`cache: false`**
+  (chosen over inputs-scoped: type resolution depends on the full dependency
+  graph and every package's `tsconfig.test.json` chain, which is error-prone to
+  enumerate as inputs; the check is fast, so skip caching) so `turbo run
+  test:types` is the repo-wide type gate matching the per-package script. Keep
+  `test`'s existing `dependsOn: ["^build:js"]`.
 
 ### 3. Local `lint:ci` script for dev/CI parity
 
@@ -92,9 +114,11 @@ already calls `biome ci .` inline); this is local parity only.
 
 ### 4. `.gitignore` gaps
 
-Add the missing common ignores: `*.log`, `.DS_Store`, `.env*`, `*.tsbuildinfo`,
-and `.superpowers/` (currently only ignored via its own nested `.gitignore`).
-Keep the existing entries.
+Add the missing common ignores: `*.log`, `.DS_Store`, `*.tsbuildinfo`, and
+`.superpowers/` (currently only ignored via its own nested `.gitignore`). For
+environment files, use `.env` and `.env.*` with an explicit `!.env.example`
+exception rather than a blanket `.env*` — a bare `.env*` would also ignore
+shareable templates like `.env.example`. Keep the existing entries.
 
 ### 5. Documentation drift
 
@@ -120,54 +144,89 @@ Keep the existing entries.
 installs without the executable bit, producing an opaque `posix_spawnp failed`
 when a PTY is spawned. Because `@tejika/test` is published to npm, a
 `postinstall` guard would run on every consumer's install — undesirable.
-Instead, document the failure mode and the `chmod +x` remedy in the
-`@tejika/test` package README (a follow-on work item will create per-package
-READMEs; until then, add a short note to the package's existing docs or a
-`TROUBLESHOOTING` note). Scope here: a documentation note only, no lifecycle
-script.
+
+The repo's **own** CI already handles this: `.github/workflows/test-platforms.yml`
+(L41-43) runs `find node_modules -type f -name spawn-helper -exec chmod +x {} +`
+before its tests. The gap is purely **consumer-facing** — a downstream project
+depending on `@tejika/test` hits the raw failure with no guidance. `@tejika/test`
+already ships a README (`packages/test/README.md`), so the destination is
+unambiguous: add a short "Troubleshooting" note there covering the
+`posix_spawnp failed` symptom and the `chmod +x` remedy (and that CI runners may
+need the same step). Scope here: a documentation note in the existing README
+only, no lifecycle script.
 
 ### 7. Phantom dev-dependency contract (doc, not code)
 
-`vitest`, `tsx`, and `del` (`del-cli`) resolve in each package only by hoisting
-from `@kigu/dev`. The repo pins `nodeLinker: hoisted` in `pnpm-workspace.yaml`,
-so this is an explicit, intentional contract of the kigu tooling preset, not an
-accident. Document the decision (a short note in `docs/agents/development.md` or
-alongside the tooling notes) stating that test/build tooling binaries are
-provided transitively by `@kigu/dev` under the pinned hoisted linker, and that
-packages therefore do not redeclare them. No per-package dependency additions.
+`vitest`, `tsx`, `swc`, `tsc`, and `del` (`del-cli`) resolve in each package only
+by hoisting from `@kigu/dev`. The repo pins `nodeLinker: hoisted` in
+`pnpm-workspace.yaml`, so this is an explicit, intentional contract of the kigu
+tooling preset, not an accident. Document the decision (a short note in
+`docs/agents/development.md` or alongside the tooling notes) stating that
+test/build tooling binaries are provided transitively by `@kigu/dev` under the
+pinned hoisted linker, and that packages therefore do not redeclare them. No
+per-package dependency additions.
+
+Documentation alone does not *enforce* the contract — a future `@kigu/dev`
+release that drops a binary would break every package silently. As cheap
+insurance, note that this reliance is verified transitively by CI already:
+`pnpm test` / `pnpm build` invoke every one of these binaries, so a missing tool
+fails the build. The doc note should state that `@kigu/dev` owns this binary
+surface and that removing a binary from it is a breaking change for consumers;
+no new standalone resolve-check script is added (the existing build/test run is
+the check).
 
 ## Cross-repo item (decoupled from this branch)
 
 ### tsconfig hardening — upstream in `@kigu/dev`, no release
 
-SWC transpiles per file, so without `verbatimModuleSyntax` an un-annotated
-type-only import can emit a runtime `import` that `tsc` will not flag. The fix
-belongs in the shared preset, not a per-repo override. In the **kigu** repo,
-add to `@kigu/dev/tsconfig.json`'s `compilerOptions`:
+Two independently-motivated compiler options are added to the shared preset
+(both were chosen for the upstream home rather than a per-repo override):
 
-- `"verbatimModuleSyntax": true`
-- `"noUncheckedIndexedAccess": true`
+- **`verbatimModuleSyntax: true`** — SWC transpiles per file with no
+  cross-file type information, so an un-annotated type-only import can emit a
+  runtime `import` that `tsc` never flags. `verbatimModuleSyntax` forces
+  `import type` on type-only imports at compile time, closing that gap. This is
+  the primary runtime-safety motivation.
+- **`noUncheckedIndexedAccess: true`** — a *separate* strictness concern (not
+  implied by the import-safety rationale above): indexed access (`arr[i]`,
+  `record[key]`) is typed as possibly `undefined`, catching a common class of
+  latent bugs. It is a broader, potentially source-breaking change — each
+  consuming repo may surface new errors on adoption. It is bundled here only
+  because the user explicitly requested both options land together upstream;
+  its blast radius is acknowledged and handled per-repo at adoption time.
 
-Commit this in the kigu repo. **Do not publish.** tejika continues to consume
-the currently-released `@kigu/dev@^0.2.1`, so this branch's build is unaffected;
-tejika (and the other stack repos) adopt the stricter preset when kigu next
-releases and each repo bumps `@kigu/dev` — at which point any resulting type
-errors are fixed per repo. This item is validated only insofar as the kigu
-package itself still type-checks; it is intentionally not wired into tejika's CI
-in this work.
+In the **kigu** repo, add both to `@kigu/dev/tsconfig.json`'s `compilerOptions`.
+Commit this in the kigu repo. **Do not publish.**
+
+`@kigu/dev` is a config/asset package with no build or type-check script of its
+own, so editing the JSON preset is not validated against any consumer in this
+work — there is nothing in kigu to compile. tejika continues to consume the
+lockfile-pinned `@kigu/dev@0.2.1`, so this branch is unaffected. Adoption
+happens when a consumer's **lockfile** resolves a `@kigu/dev` release carrying
+the change: a `0.2.x` republish flows in on a lockfile refresh under the
+existing `^0.2.1` range with no manifest edit, whereas a `0.3.0`+ release needs
+a range bump. Whichever path, the adopting repo runs its type-check at update
+time and fixes any new errors then. This item is intentionally **not** wired
+into tejika's CI here; its only in-loop deliverable is the committed, unpublished
+kigu edit.
 
 ## Decisions and rationale
 
 - **Re-scope over re-implement.** Three audit findings were already satisfied by
   changes that post-date the audit; re-doing them would add churn and risk
   regressions. They are verified, not rewritten.
-- **Re-stage, don't fail, in pre-commit.** A blocking hook on autofixable issues
-  is hostile to flow; re-staging Biome's own fixes keeps the commit consistent
-  while staying non-blocking. Genuinely un-fixable lint/type errors still fail
-  the hook (Biome/`tsc` non-zero exit).
+- **Fail-loud, non-mutating pre-commit** rather than auto-fix-and-re-stage. A
+  re-stage via `git add -u` would silently broaden a partially-staged commit to
+  include unrelated unstaged hunks, and index-preserving re-staging is fragile in
+  a `sh` hook. A non-mutating `biome check --staged` that fails and points at
+  `pnpm lint` is correct, mirrors CI exactly, and never touches the author's
+  index.
 - **Drop turbo `clean` modeling entirely** rather than wire a real `clean`
-  dependency. Clean-before-build integrity is already guaranteed where it
-  matters (`prepack`); a turbo `clean` node only complicates the graph.
+  dependency. The removal is behaviour-neutral (the `^clean` dependency is
+  already a no-op). Clean-before-build integrity where it matters is already
+  guaranteed (`prepack`, per-package `build`); a turbo `clean` node only
+  complicates the graph. The pre-existing stale-`lib/` limitation for plain
+  `build:js` is noted, not fixed, here.
 - **Workflow ref stays `@main`.** kigu publishes no release tags, and it is a
   first-party same-org repo; pinning to a commit SHA buys reproducibility at the
   cost of a permanent manual-bump burden with no upstream tag to track. Revisit
@@ -184,22 +243,27 @@ in this work.
 
 - Wiring the stricter tsconfig into tejika's build (waits on a kigu release +
   `@kigu/dev` bump).
-- Per-package and root READMEs (`next/2026-09-02-package-readmes-and-metadata.md`)
-  — the node-pty note lands wherever `@tejika/test` docs live now and moves into
-  its README when that work runs.
+- Expanded per-package and root READMEs
+  (`next/2026-09-02-package-readmes-and-metadata.md`). The node-pty note lands in
+  the already-existing `packages/test/README.md` now; the broader README work is
+  separate.
 - Any change to the shared kigu workflow file itself.
 
 ## Verification
 
 - `pnpm exec biome ci .` clean (native Biome, **not** `rtk`).
 - `pnpm build` and `pnpm test` green.
-- Pre-commit hook: a deliberately mis-formatted staged file is auto-fixed **and
-  re-staged** (commit contains fixed content); a genuine type error still blocks
-  the commit.
+- Pre-commit hook: a deliberately mis-formatted **staged** file makes the commit
+  **fail** with the `pnpm lint` guidance (hook does not edit the working tree or
+  index); after `pnpm lint` + re-stage the commit succeeds. A partially-staged
+  file with separate unstaged edits: the hook never stages the unstaged hunks. A
+  genuine type error still blocks the commit.
 - `turbo run build:js` and `turbo run test:types` succeed with the new task
-  graph; no reference to a `clean` task remains.
+  graph; no reference to a `clean` task remains; `turbo run build:js --dry=json`
+  shows the intended narrowed `inputs`.
 - Docs match code: architecture.md server line lists `@enkaku/{http-serve,protocol}`
   and no `get-port`; development.md has no `tests/integration/` reference and
   says `@enkaku` `0.21`.
-- kigu: `@kigu/dev` still type-checks with the two added compiler options; change
-  committed in the kigu repo, unpublished.
+- kigu: `@kigu/dev/tsconfig.json` carries both new options and is valid JSON
+  (the package has no compile step to run); change committed in the kigu repo,
+  unpublished. Not wired into tejika CI.

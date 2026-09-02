@@ -62,11 +62,29 @@ the note landed in `docs/agents/architecture.md` instead.
 Full `pnpm build` + `pnpm test` (all packages) + `biome ci` green on this macOS
 host. Two Codex review passes: the first surfaced the win32 filesystem-op gap and
 the `sun_path` NUL off-by-one (both fixed in this branch); the second was clean.
-The win32 code paths themselves cannot run on macOS — a cross-platform CI matrix
-(ubuntu/macos/windows × node 24/26) was added in `.github/workflows/test-platforms.yml`
-to exercise them on real runners once merged.
+The win32 code paths cannot run on macOS, so a cross-platform CI matrix
+(ubuntu/macos/windows × node 24/26) was added in
+`.github/workflows/test-platforms.yml` to exercise them on real runners.
+
+On that matrix, all unit suites — `@tejika/env` (path resolution, named-pipe
+strings, length guard, sanitization), `@tejika/process`, `@tejika/server`, and
+the rest — pass on Windows, macOS, and Linux, and the full suite passes on macOS
+and Linux. Getting there fixed several OS-portability issues in the tests
+themselves (platform-pinned `.sock` assertions, `node:path`-derived expectations
+for the Windows separator, a hardware-independent concurrency floor, and an
+absolute `process.execPath` for node-pty's Windows agent) plus a pnpm/node-pty
+`spawn-helper` exec-bit step on macOS. Two Windows gaps remain deferred: the
+node-pty conpty backend crashes its vitest worker on Windows Server 2025 (an
+upstream bug — the PTY-driven suites are skipped on win32), and the full
+daemon-lifecycle + Enkaku IPC stack does not yet run over Windows named pipes
+(the daemon-integration suites are skipped on win32). Neither is in the env-paths
+path code; both are tracked in the follow-on backlog.
 
 ## Follow-on
 
-Two low-severity cleanups extracted to backlog (see
-`docs/agents/plans/backlog/2026-09-02-env-paths-followups.md`).
+The two low-severity cleanups extracted to backlog were addressed on this branch
+(duplicate `appEnvVar` tests trimmed, the `WithSocketPathOptions.name` doc
+corrected). The remaining follow-on is the Windows daemon-IPC port — bringing the
+`@tejika/process` daemon lifecycle and `@enkaku` IPC up over Windows named pipes,
+then dropping the win32 skips on the daemon-integration and PTY suites — tracked
+in `docs/agents/plans/backlog/2026-09-02-windows-daemon-ipc.md`.

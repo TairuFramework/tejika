@@ -45,6 +45,12 @@ export function getSocketPath(app: string, name?: string): string {
     assertNoSeparator(name, 'name')
   }
   const override = getAppEnvVar(app, 'SOCKET_PATH')
+  if (process.platform === 'win32') {
+    if (override != null && name == null) {
+      return override
+    }
+    return `\\\\.\\pipe\\${name == null ? app : name}`
+  }
   let path: string
   if (override != null) {
     path = name == null ? override : join(dirname(override), `${name}.sock`)

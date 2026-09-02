@@ -156,3 +156,28 @@ describe('getSocketPath length guard', () => {
     expect(getSocketPath('myapp')).toBe('/run/app.sock')
   })
 })
+
+describe('getSocketPath on win32', () => {
+  const realPlatform = process.platform
+  const setPlatform = (value: string) =>
+    Object.defineProperty(process, 'platform', { value, configurable: true })
+  afterEach(() => setPlatform(realPlatform))
+
+  test('returns an app-named pipe', () => {
+    setPlatform('win32')
+    expect(getSocketPath('myapp')).toBe('\\\\.\\pipe\\myapp')
+  })
+  test('returns a named pipe', () => {
+    setPlatform('win32')
+    expect(getSocketPath('myapp', 'monitor')).toBe('\\\\.\\pipe\\monitor')
+  })
+  test('honors an override with no name', () => {
+    setPlatform('win32')
+    process.env.MYAPP_SOCKET_PATH = '\\\\.\\pipe\\custom'
+    expect(getSocketPath('myapp')).toBe('\\\\.\\pipe\\custom')
+  })
+  test('does not apply the posix length guard', () => {
+    setPlatform('win32')
+    expect(getSocketPath('myapp', 'x'.repeat(200))).toBe(`\\\\.\\pipe\\${'x'.repeat(200)}`)
+  })
+})

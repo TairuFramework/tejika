@@ -135,8 +135,16 @@ describe('withSocketPath', () => {
     expect(seen().socketPath).toBe('/tmp/flag.sock')
   })
 
-  test('a named socket resolves under the data dir, ignoring the path override', async () => {
+  test('a named socket anchors to the override directory', async () => {
     process.env.MYAPP_SOCKET_PATH = '/tmp/from-env.sock'
+    const { program, seen } = programWithSubcommand((cmd) =>
+      withSocketPath(cmd, 'myapp', { name: 'worker' }),
+    )
+    await program.parseAsync(['sub'], { from: 'user' })
+    expect(seen().socketPath).toBe('/tmp/worker.sock')
+  })
+
+  test('a named socket resolves under the data dir when no override is set', async () => {
     process.env.MYAPP_DATA_DIR = '/tmp/data'
     const { program, seen } = programWithSubcommand((cmd) =>
       withSocketPath(cmd, 'myapp', { name: 'worker' }),

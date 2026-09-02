@@ -13,19 +13,20 @@
 Packages are live on npm, so security and publish correctness come first.
 Done: server-security (`completed/2026-07-07-server-security-hardening.complete.md`),
 port-and-CLI-validation (`completed/2026-07-13-port-and-cli-option-validation.complete.md`),
-daemon-robustness (`completed/2026-07-11-process-daemon-robustness.complete.md`).
+daemon-robustness (`completed/2026-07-11-process-daemon-robustness.complete.md`),
+env-paths-hardening (`getStateDir`→`getConfigDir`/`getPIDPath` renames +
+socket-length/Windows guards, shipped 2026-08-08..2026-09-01 across #9/#10),
+publishing-readiness (`completed/2026-09-02-publishing-readiness.complete.md`).
 
 Remaining, in order:
 
-1. `next/2026-07-06-env-paths-hardening.md` — **first.** Breaking `getStateDir`→
-   `getConfigDir` and `getPIDPath` renames + socket-length/Windows guards. Land
-   before a release consumers pin, and before Sakui migrates.
-2. `next/2026-07-06-publishing-readiness.md` — LICENSE, metadata, `react`/`ink`
-   to peer deps, release automation.
-3. `next/2026-07-06-ci-and-tooling-integrity.md` — non-mutating `lint:ci`,
+1. `next/2026-07-06-ci-and-tooling-integrity.md` — non-mutating `lint:ci`,
    pre-commit fix, turbo/biome/tsconfig.
-4. `next/2026-07-06-ui-input-safety-and-polish.md` — `isActive` key handling +
+2. `next/2026-07-06-ui-input-safety-and-polish.md` — `isActive` key handling +
    interaction tests.
+3. `next/2026-09-02-package-readmes-and-metadata.md` — per-package + root
+   READMEs, `repository.url` publint suggestion (follow-on from
+   publishing-readiness).
 
 ## Next — Sakui adopts `@tejika/*` (desktop)
 

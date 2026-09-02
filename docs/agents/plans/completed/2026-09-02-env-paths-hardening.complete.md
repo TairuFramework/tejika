@@ -21,7 +21,11 @@ helpers.
   must not move. The audit's "rename to `getConfigDir` or compute a real state
   dir" was intentionally declined.
 - **Windows: named pipes, not POSIX-only.** `getSocketPath` returns
-  `\\.\pipe\<name>` on `win32`. Because a named pipe has no filesystem entry,
+  `\\.\pipe\<base>-<hash>` on `win32`, where `<hash>` is a short digest of the
+  resolved anchor (the data dir, or the `SOCKET_PATH` override directory) — named
+  pipes share one machine-global namespace, so folding the anchor in keeps
+  distinct profiles and users from colliding on the same pipe. Because a named
+  pipe has no filesystem entry,
   `@tejika/env` also exposes `isNamedPipe(path)`, and `@tejika/process` uses it to
   skip the filesystem-only socket steps (parent-dir `mkdir`, `chmod` after bind,
   stale-file cleanup) while still probing pipe liveness for foreign-daemon
@@ -29,8 +33,9 @@ helpers.
   the path string alone.
 - **`SOCKET_PATH` override is a directory anchor.** On POSIX, override + a `name`
   resolves to `join(dirname(override), name + '.sock')`; override + no name is
-  verbatim. On win32 a `name` always yields `\\.\pipe\<name>`, ignoring the
-  override; no name uses the override verbatim.
+  verbatim. On win32 the same anchor (override directory, or the data dir) is
+  hashed into the pipe name so the override still scopes the endpoint; override +
+  no name uses the override verbatim.
 - **Socket-length guard reserves the NUL.** `sun_path` holds 104 bytes on darwin /
   108 on linux *including* the terminating NUL, so the usable pathname limit is
   103/107. The guard rejects `> 103/107` (not `> 104/108`, which let an

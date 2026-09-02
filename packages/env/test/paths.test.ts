@@ -205,22 +205,44 @@ describe('isNamedPipe', () => {
 
 describe('getSocketPath on win32', () => {
   afterEach(restorePlatform)
-
-  test('returns an app-named pipe', () => {
+  // A fixed data dir keeps the anchor (and thus the pipe hash) deterministic on a
+  // non-Windows test host, where `envPaths` would otherwise resolve differently.
+  beforeEach(() => {
     setPlatform('win32')
-    expect(getSocketPath('myapp')).toBe('\\\\.\\pipe\\myapp')
+    process.env.MYAPP_DATA_DIR = 'C:\\data\\myapp'
   })
-  test('returns a named pipe', () => {
-    setPlatform('win32')
-    expect(getSocketPath('myapp', 'monitor')).toBe('\\\\.\\pipe\\monitor')
+
+  test('returns an app-scoped pipe', () => {
+    expect(getSocketPath('myapp')).toMatch(/^\\\\\.\\pipe\\myapp-[0-9a-f]{12}$/)
+  })
+  test('returns a name-scoped pipe', () => {
+    expect(getSocketPath('myapp', 'monitor')).toMatch(/^\\\\\.\\pipe\\monitor-[0-9a-f]{12}$/)
   })
   test('honors an override with no name', () => {
-    setPlatform('win32')
     process.env.MYAPP_SOCKET_PATH = '\\\\.\\pipe\\custom'
     expect(getSocketPath('myapp')).toBe('\\\\.\\pipe\\custom')
   })
   test('does not apply the posix length guard', () => {
-    setPlatform('win32')
-    expect(getSocketPath('myapp', 'x'.repeat(200))).toBe(`\\\\.\\pipe\\${'x'.repeat(200)}`)
+    expect(getSocketPath('myapp', 'x'.repeat(200))).toMatch(
+      new RegExp(`^\\\\\\\\\\.\\\\pipe\\\\${'x'.repeat(200)}-[0-9a-f]{12}$`),
+    )
+  })
+  // Named pipes are machine-global: distinct profiles/users must not resolve to the
+  // same pipe just because they share an app or socket name.
+  test('scopes the pipe name to the data dir so distinct profiles do not collide', () => {
+    process.env.MYAPP_DATA_DIR = 'C:\\data\\profileA'
+    const a = getSocketPath('myapp')
+    process.env.MYAPP_DATA_DIR = 'C:\\data\\profileB'
+    const b = getSocketPath('myapp')
+    expect(a).not.toBe(b)
+  })
+  test('scopes a named pipe to the override directory', () => {
+    // Forward-slash overrides so `node:path` `dirname` splits them the same way on
+    // the non-Windows test host as it would on Windows.
+    process.env.MYAPP_SOCKET_PATH = '/run/a/app.sock'
+    const a = getSocketPath('myapp', 'monitor')
+    process.env.MYAPP_SOCKET_PATH = '/run/b/app.sock'
+    const b = getSocketPath('myapp', 'monitor')
+    expect(a).not.toBe(b)
   })
 })

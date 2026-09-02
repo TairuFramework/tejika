@@ -5,7 +5,9 @@ export type WithSocketPathOptions = {
   /**
    * Resolve a named socket. With a `<APP>_SOCKET_PATH` override set it anchors to that
    * override's directory (`<name>.sock` beside it); otherwise it resolves under the app
-   * data dir. On Windows it is a `\\.\pipe\<name>` named pipe.
+   * data dir. On Windows it is a `\\.\pipe\<name>-<hash>` named pipe, where the hash scopes
+   * the (machine-global) pipe name to the resolved anchor so distinct profiles/users do not
+   * collide.
    */
   name?: string
 }

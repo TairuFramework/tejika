@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import envPaths from 'env-paths'
 
@@ -51,11 +52,24 @@ export function getLogDir(app: string): string {
 }
 
 /**
- * IPC endpoint for `app` (optionally a named sub-socket). On POSIX a `.sock` path under
- * the data dir; on win32 a `\\.\pipe\<name>` named pipe. On POSIX the `<APP>_SOCKET_PATH`
- * override is a directory anchor: with a `name` the socket is derived from `dirname(override)`.
- * On win32 a `name` always yields `\\.\pipe\<name>`, ignoring any override. With no `name`,
- * the override is used verbatim on both platforms. `app`/`name` may not contain a path
+ * A win32 named pipe for `base`, scoped by a short stable hash of `anchor` (the POSIX-style
+ * `.sock` path the same call resolves on POSIX). Named pipes live in one machine-global
+ * namespace, so the base name alone would collide: two profiles selected by distinct
+ * `DATA_DIR`/`SOCKET_PATH` overrides, or two users running the same app, would otherwise
+ * share a pipe. Folding the resolved anchor in gives each its own.
+ */
+function namedPipeFor(base: string, anchor: string): string {
+  const scope = createHash('sha256').update(anchor).digest('hex').slice(0, 12)
+  return `\\\\.\\pipe\\${base}-${scope}`
+}
+
+/**
+ * IPC endpoint for `app` (optionally a named sub-socket). On POSIX a `.sock` path under the
+ * data dir; on win32 a `\\.\pipe\<base>-<hash>` named pipe. The `<APP>_SOCKET_PATH` override
+ * is a directory anchor: with a `name` the endpoint is derived from `dirname(override)`; with
+ * no `name` the override is used verbatim on both platforms. On win32 the pipe name folds in
+ * a hash of the resolved anchor (data dir or override directory), so distinct profiles and
+ * users do not collide in the global pipe namespace. `app`/`name` may not contain a path
  * separator or `..`. On POSIX an over-length path throws (`sun_path` holds 104/108 bytes
  * including the NUL, so the usable pathname limit is 103/107).
  */
@@ -69,7 +83,11 @@ export function getSocketPath(app: string, name?: string): string {
     if (override != null && name == null) {
       return override
     }
-    return `\\\\.\\pipe\\${name == null ? app : name}`
+    const anchor =
+      override != null
+        ? join(dirname(override), `${name}.sock`)
+        : join(getDataDir(app), name == null ? `${app}.sock` : `${name}.sock`)
+    return namedPipeFor(name ?? app, anchor)
   }
   let path: string
   if (override != null) {

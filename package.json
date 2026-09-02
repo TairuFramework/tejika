@@ -11,6 +11,7 @@
     "build:types": "pnpm run -r build:types",
     "build:types:ci": "pnpm run -r build:types:ci",
     "lint": "biome check --write ./packages",
+    "lint:ci": "biome ci .",
     "prepare": "git config core.hooksPath .githooks",
     "release": "pnpm run build:ci && pnpm publish -r",
     "test": "turbo run test"

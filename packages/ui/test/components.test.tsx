@@ -1,5 +1,6 @@
 import { render } from 'ink-testing-library'
-import { describe, expect, test } from 'vitest'
+import { act } from 'react'
+import { describe, expect, test, vi } from 'vitest'
 
 import { ConfirmCard } from '../src/ConfirmCard.js'
 import { Footer } from '../src/Footer.js'
@@ -36,6 +37,102 @@ describe('ConfirmCard', () => {
       <ConfirmCard message="proceed?" onConfirm={noop} onCancel={noop} />,
     )
     expect(lastFrame()).toContain('proceed?')
+  })
+
+  test('y confirms', () => {
+    const onConfirm = vi.fn()
+    const onCancel = vi.fn()
+    const { stdin } = render(<ConfirmCard message="?" onConfirm={onConfirm} onCancel={onCancel} />)
+    act(() => stdin.write('y'))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  test('enter confirms', () => {
+    const onConfirm = vi.fn()
+    const { stdin } = render(<ConfirmCard message="?" onConfirm={onConfirm} onCancel={vi.fn()} />)
+    act(() => stdin.write('\r'))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  test('n cancels', () => {
+    const onCancel = vi.fn()
+    const { stdin } = render(<ConfirmCard message="?" onConfirm={vi.fn()} onCancel={onCancel} />)
+    act(() => stdin.write('n'))
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
+  test('esc cancels', () => {
+    vi.useFakeTimers()
+    const onCancel = vi.fn()
+    const { stdin } = render(<ConfirmCard message="?" onConfirm={vi.fn()} onCancel={onCancel} />)
+    stdin.write('\x1b')
+    vi.runAllTimers()
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  test('shared latch: y then y confirms once', () => {
+    const onConfirm = vi.fn()
+    const { stdin } = render(<ConfirmCard message="?" onConfirm={onConfirm} onCancel={vi.fn()} />)
+    act(() => stdin.write('y'))
+    act(() => stdin.write('y'))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  test('shared latch: y then esc confirms once, never cancels', () => {
+    vi.useFakeTimers()
+    const onConfirm = vi.fn()
+    const onCancel = vi.fn()
+    const { stdin } = render(<ConfirmCard message="?" onConfirm={onConfirm} onCancel={onCancel} />)
+    act(() => stdin.write('y'))
+    stdin.write('\x1b')
+    vi.runAllTimers()
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    expect(onCancel).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  test('isActive={false} ignores all keys', () => {
+    const onConfirm = vi.fn()
+    const onCancel = vi.fn()
+    const { stdin } = render(
+      <ConfirmCard message="?" isActive={false} onConfirm={onConfirm} onCancel={onCancel} />,
+    )
+    act(() => stdin.write('y'))
+    act(() => stdin.write('n'))
+    expect(onConfirm).not.toHaveBeenCalled()
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  test('a rejecting onConfirm does not raise an unhandled rejection', async () => {
+    const onRejection = vi.fn()
+    process.on('unhandledRejection', onRejection)
+    const { stdin } = render(
+      <ConfirmCard
+        message="?"
+        onConfirm={() => Promise.reject(new Error('boom'))}
+        onCancel={vi.fn()}
+      />,
+    )
+    act(() => stdin.write('y'))
+    await new Promise((resolve) => setImmediate(resolve))
+    process.off('unhandledRejection', onRejection)
+    expect(onRejection).not.toHaveBeenCalled()
+  })
+
+  test('a synchronous throw from onCancel does not escape the handler', () => {
+    const { stdin, lastFrame } = render(
+      <ConfirmCard
+        message="alive"
+        onConfirm={vi.fn()}
+        onCancel={() => {
+          throw new Error('boom')
+        }}
+      />,
+    )
+    expect(() => act(() => stdin.write('n'))).not.toThrow()
+    expect(lastFrame()).toContain('alive')
   })
 })
 

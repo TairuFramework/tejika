@@ -95,9 +95,12 @@ re-implemented:
   first-party same-org repo; pinning to a commit SHA buys reproducibility at the
   cost of a permanent manual-bump burden with no tag to track. Revisit when kigu
   starts tagging releases.
-- **Adopting the stricter `@kigu/dev` tsconfig in tejika.** Waits on a kigu
-  release + `@kigu/dev` update — see
-  `backlog/2026-09-02-adopt-stricter-kigu-tsconfig.md`.
+- **Adopting the stricter `@kigu/dev` tsconfig in tejika.** ~~Waits on a kigu
+  release~~ — **done in this branch.** kigu published `@kigu/dev@0.3.0` carrying
+  `verbatimModuleSyntax` + `noUncheckedIndexedAccess`; tejika bumped the range to
+  `^0.3.0`. Only fallout was one `noUncheckedIndexedAccess` hit — a destructured
+  `process.argv.slice(2)` in `packages/process/test/fixtures/stop-nonpositive-pid.ts`,
+  fixed with an argument-presence guard. `pnpm build`/`pnpm test`/`biome ci` green.
 
 ## Verification
 

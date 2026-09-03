@@ -12,6 +12,9 @@ import { stopDaemon } from '../../src/stop.js'
 // take the test runner down with it: a pre-fix run dies by SIGTERM instead of
 // printing a result.
 const [pidPath, socketPath] = process.argv.slice(2)
+if (pidPath == null || socketPath == null) {
+  throw new Error('usage: stop-nonpositive-pid.ts <pidPath> <socketPath>')
+}
 
 writeFileSync(
   pidPath,

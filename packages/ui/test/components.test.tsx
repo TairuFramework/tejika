@@ -102,6 +102,7 @@ describe('ConfirmCard', () => {
   })
 
   test('isActive={false} ignores all keys', () => {
+    vi.useFakeTimers()
     const onConfirm = vi.fn()
     const onCancel = vi.fn()
     const { stdin } = render(
@@ -109,24 +110,31 @@ describe('ConfirmCard', () => {
     )
     act(() => stdin.write('y'))
     act(() => stdin.write('n'))
+    act(() => stdin.write('\r'))
+    stdin.write('\x1b')
+    vi.runAllTimers()
     expect(onConfirm).not.toHaveBeenCalled()
     expect(onCancel).not.toHaveBeenCalled()
+    vi.useRealTimers()
   })
 
   test('a rejecting onConfirm does not raise an unhandled rejection', async () => {
     const onRejection = vi.fn()
     process.on('unhandledRejection', onRejection)
-    const { stdin } = render(
-      <ConfirmCard
-        message="?"
-        onConfirm={() => Promise.reject(new Error('boom'))}
-        onCancel={vi.fn()}
-      />,
-    )
-    act(() => stdin.write('y'))
-    await new Promise((resolve) => setImmediate(resolve))
-    process.off('unhandledRejection', onRejection)
-    expect(onRejection).not.toHaveBeenCalled()
+    try {
+      const { stdin } = render(
+        <ConfirmCard
+          message="?"
+          onConfirm={() => Promise.reject(new Error('boom'))}
+          onCancel={vi.fn()}
+        />,
+      )
+      act(() => stdin.write('y'))
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(onRejection).not.toHaveBeenCalled()
+    } finally {
+      process.off('unhandledRejection', onRejection)
+    }
   })
 
   test('a synchronous throw from onCancel does not escape the handler', () => {
@@ -146,17 +154,20 @@ describe('ConfirmCard', () => {
   test('a rejecting onCancel does not raise an unhandled rejection', async () => {
     const onRejection = vi.fn()
     process.on('unhandledRejection', onRejection)
-    const { stdin } = render(
-      <ConfirmCard
-        message="?"
-        onConfirm={vi.fn()}
-        onCancel={() => Promise.reject(new Error('boom'))}
-      />,
-    )
-    act(() => stdin.write('n'))
-    await new Promise((resolve) => setImmediate(resolve))
-    process.off('unhandledRejection', onRejection)
-    expect(onRejection).not.toHaveBeenCalled()
+    try {
+      const { stdin } = render(
+        <ConfirmCard
+          message="?"
+          onConfirm={vi.fn()}
+          onCancel={() => Promise.reject(new Error('boom'))}
+        />,
+      )
+      act(() => stdin.write('n'))
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(onRejection).not.toHaveBeenCalled()
+    } finally {
+      process.off('unhandledRejection', onRejection)
+    }
   })
 
   test('a synchronous throw from onConfirm does not escape the handler', () => {
@@ -261,6 +272,7 @@ describe('SelectCard', () => {
     const { stdin } = render(
       <SelectCard isActive={false} items={[{ label: 'a', value: 'a' }]} onSelect={onSelect} />,
     )
+    act(() => stdin.write('\x1b[B'))
     act(() => stdin.write('\r'))
     expect(onSelect).not.toHaveBeenCalled()
   })

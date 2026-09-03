@@ -21,10 +21,13 @@ export type SelectCardProps<T = string> = {
 /**
  * A bordered single-choice list. Esc cancels (when `onCancel` is provided).
  *
- * `items` is treated as a stable list for the card's mount: selection is keyed
- * by position, so changing `items` (insert/remove/reorder) resets selection,
- * matching `@inkjs/ui`'s own behavior. An empty list with no `onCancel` is an
- * intentionally terminal presentational state; the caller controls unmounting.
+ * Selection is keyed by position for the card's mount. Changing the list's
+ * length or an item's label resets/remaps selection, but reordering items
+ * with identical labels may not (`@inkjs/ui`'s `Select` only resets when its
+ * mapped options are deeply unequal). Callers needing selection to survive
+ * list changes should remount with a stable React `key`. An empty list with
+ * no `onCancel` is an intentionally terminal presentational state; the
+ * caller controls unmounting.
  */
 export function SelectCard<T = string>({
   title,

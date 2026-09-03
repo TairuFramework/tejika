@@ -19,6 +19,23 @@ const crashExitRunner = fileURLToPath(new URL('./fixtures/spawn-crash-exit.ts', 
 // process having to mutate its own NODE_OPTIONS.
 const env = { NODE_OPTIONS: '--import tsx' }
 
+// `spawnDaemon` resolves the instant the socket accepts connections. The daemon
+// writes its `ready: true` record the moment it binds, but that write happens in
+// the child process and the OS accepts connections from the bind itself — so this
+// process can connect (and read the record) a beat before the child's write is
+// visible here. The gap is a few milliseconds and only shows up on a loaded CI
+// runner. Poll for the settled record instead of assuming cross-process file
+// consistency is instantaneous.
+async function readReadyRecord(path: string): Promise<{ ready: boolean; pid: number }> {
+  const deadline = Date.now() + 5_000
+  let record = JSON.parse(readFileSync(path, 'utf8')) as { ready: boolean; pid: number }
+  while (!record.ready && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    record = JSON.parse(readFileSync(path, 'utf8')) as { ready: boolean; pid: number }
+  }
+  return record
+}
+
 let dir: string
 let socketPath: string
 let pidPath: string
@@ -46,7 +63,7 @@ test('spawns a daemon and resolves once its socket accepts', { timeout: 30_000 }
     env,
     timeoutMs: 20_000,
   })
-  const record = JSON.parse(readFileSync(pidPath, 'utf8')) as { ready: boolean; pid: number }
+  const record = await readReadyRecord(pidPath)
   expect(record.ready).toBe(true)
   expect(record.pid).toBeGreaterThan(0)
 })
@@ -65,7 +82,7 @@ test('runs the daemon under an explicit execPath', { timeout: 30_000 }, async ()
     env,
     timeoutMs: 20_000,
   })
-  const record = JSON.parse(readFileSync(pidPath, 'utf8')) as { ready: boolean }
+  const record = await readReadyRecord(pidPath)
   expect(record.ready).toBe(true)
 })
 

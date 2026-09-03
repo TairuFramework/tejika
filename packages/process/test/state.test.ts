@@ -91,9 +91,15 @@ describe('writeDaemonState', () => {
     })
     await new Promise<void>((resolve) => reader.once('online', () => resolve()))
 
+    // Count-driven, not time-driven: a fixed cycle target keeps the writer's
+    // liveness proof off the runner's clock speed (a slow/loaded CI runner once
+    // managed only 19 cycles in a 750ms window and tripped the floor). The
+    // deadline is a safety cap well under the test timeout, not the loop's normal
+    // exit — reaching it means a pathologically slow runner, and `cycles` is
+    // asserted below regardless.
     let cycles = 0
-    const until = Date.now() + 750
-    while (Date.now() < until) {
+    const deadline = Date.now() + 15_000
+    while (cycles < 200 && Date.now() < deadline) {
       writeDaemonState(pidPath, state({ pid: process.pid }))
       writeDaemonState(pidPath, state({ pid: process.pid, ready: true }))
       cycles++

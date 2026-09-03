@@ -16,15 +16,14 @@ port-and-CLI-validation (`completed/2026-07-13-port-and-cli-option-validation.co
 daemon-robustness (`completed/2026-07-11-process-daemon-robustness.complete.md`),
 env-paths-hardening (`getStateDir`→`getConfigDir`/`getPIDPath` renames +
 socket-length/Windows guards, shipped 2026-08-08..2026-09-01 across #9/#10),
-publishing-readiness (`completed/2026-09-02-publishing-readiness.complete.md`).
+publishing-readiness (`completed/2026-09-02-publishing-readiness.complete.md`),
+ci-and-tooling-integrity (`completed/2026-09-02-ci-and-tooling-integrity.complete.md`).
 
 Remaining, in order:
 
-1. `next/2026-07-06-ci-and-tooling-integrity.md` — non-mutating `lint:ci`,
-   pre-commit fix, turbo/biome/tsconfig.
-2. `next/2026-07-06-ui-input-safety-and-polish.md` — `isActive` key handling +
+1. `next/2026-07-06-ui-input-safety-and-polish.md` — `isActive` key handling +
    interaction tests.
-3. `next/2026-09-02-package-readmes-and-metadata.md` — per-package + root
+2. `next/2026-09-02-package-readmes-and-metadata.md` — per-package + root
    READMEs, `repository.url` publint suggestion (follow-on from
    publishing-readiness).
 

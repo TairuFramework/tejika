@@ -42,10 +42,10 @@ apps that compose these packages.
 ## Dependency graph
 
 ```
-@tejika/env       no @tejika deps (foundational)
+@tejika/env       no @tejika deps; env-paths + get-port (foundational)
 @tejika/log       env + @logtape/file (@logtape/logtape peer, no @sozai/log)
 @tejika/process   env + @enkaku/{socket,client,protocol,server} + @sozai/lock + nano-spawn
-@tejika/server    env + @enkaku/http-serve + hono + @hono/node-server + get-port
+@tejika/server    env + @enkaku/{http-serve,protocol} + hono + @hono/node-server
 @tejika/cli       commander, ink, react; env (default option values)
 @tejika/ui        ink, @inkjs/ui, react
 @tejika/test      env + process + node-pty + strip-ansi (devDependency for consumers)

@@ -17,3 +17,18 @@ as a devDependency.
 - `poll` — the shared truthy-poll primitive.
 - `assertBuilt` / `rebuild` — vitest globalSetup helpers for tests that spawn
   built binaries.
+
+## Troubleshooting
+
+### `posix_spawnp failed` when spawning a PTY
+
+`node-pty` ships a prebuilt `spawn-helper` binary that must be executable. Some
+installs (notably pnpm's content-addressed store hardlinks) can land it without
+the executable bit, so `PTYDriver` fails with `posix_spawnp failed`. Restore it:
+
+```sh
+find node_modules -type f -name spawn-helper -exec chmod +x {} +
+```
+
+CI runners that install fresh may need the same step before running PTY-backed
+tests. (This repo's own `test-platforms.yml` workflow already does this.)

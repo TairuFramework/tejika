@@ -20,5 +20,3 @@ export function StatusLine({ label, icon, color, busy }: StatusLineProps) {
     </Box>
   )
 }
-
-export default StatusLine

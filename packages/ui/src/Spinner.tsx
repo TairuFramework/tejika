@@ -23,5 +23,3 @@ export function Spinner({ label, elapsedMs }: SpinnerProps) {
     </Box>
   )
 }
-
-export default Spinner

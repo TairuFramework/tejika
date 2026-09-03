@@ -64,5 +64,3 @@ export function SelectCard<T = string>({
     </Box>
   )
 }
-
-export default SelectCard

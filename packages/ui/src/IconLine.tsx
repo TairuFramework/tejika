@@ -28,5 +28,3 @@ export function IconLine({ icon, color, dim, children }: IconLineProps) {
     </Box>
   )
 }
-
-export default IconLine

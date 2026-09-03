@@ -15,5 +15,3 @@ export function Footer({ children, borderColor = 'gray' }: FooterProps) {
     </Box>
   )
 }
-
-export default Footer

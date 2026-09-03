@@ -31,5 +31,3 @@ export function SystemNotice({ variant = 'info', text }: SystemNoticeProps) {
     </IconLine>
   )
 }
-
-export default SystemNotice

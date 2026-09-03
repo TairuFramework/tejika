@@ -1,10 +1,10 @@
 import { Spinner } from '@inkjs/ui'
-import { Box, Text } from 'ink'
+import { Box, Text, type TextProps } from 'ink'
 
 export type StatusLineProps = {
   label: string
   icon?: string
-  color?: string
+  color?: TextProps['color']
   /** Show a spinner ahead of the label (e.g. while busy). */
   busy?: boolean
 }
@@ -14,10 +14,9 @@ export function StatusLine({ label, icon, color, busy }: StatusLineProps) {
   return (
     <Box>
       {busy ? <Spinner /> : null}
+      {busy ? <Text> </Text> : null}
       {icon != null ? <Text color={color}>{icon} </Text> : null}
       <Text color={color}>{label}</Text>
     </Box>
   )
 }
-
-export default StatusLine

@@ -1,3 +1,5 @@
+import type { TextProps } from 'ink'
+
 import { IconLine } from './IconLine.js'
 
 export type SystemNoticeVariant = 'info' | 'warning' | 'error' | 'success'
@@ -7,7 +9,7 @@ export type SystemNoticeProps = {
   text: string
 }
 
-const COLOR: Record<SystemNoticeVariant, string> = {
+const COLOR: Record<SystemNoticeVariant, TextProps['color']> = {
   info: 'blue',
   warning: 'yellow',
   error: 'red',
@@ -15,7 +17,7 @@ const COLOR: Record<SystemNoticeVariant, string> = {
 }
 
 const ICON: Record<SystemNoticeVariant, string> = {
-  info: 'ℹ',
+  info: 'i',
   warning: '!',
   error: '✗',
   success: '✓',

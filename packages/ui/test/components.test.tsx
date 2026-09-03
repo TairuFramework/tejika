@@ -1,3 +1,4 @@
+import { Box } from 'ink'
 import { render } from 'ink-testing-library'
 import { act } from 'react'
 import { describe, expect, test, vi } from 'vitest'
@@ -285,6 +286,45 @@ describe('Footer', () => {
   test('renders its children', () => {
     const { lastFrame } = render(
       <Footer>
+        <KeyHints hints={[{ keys: 'q', label: 'quit' }]} />
+      </Footer>,
+    )
+    expect(lastFrame()).toContain('[q] quit')
+  })
+})
+
+describe('SystemNotice icon', () => {
+  test('info notice uses an ascii "i", not the ambiguous-width glyph', () => {
+    const { lastFrame } = render(<SystemNotice variant="info" text="heads up" />)
+    const frame = lastFrame() ?? ''
+    expect(frame).toContain('heads up')
+    expect(frame).not.toContain('ℹ')
+    expect(frame).toContain('i')
+  })
+})
+
+describe('KeyHints layout', () => {
+  test('renders each hint even when width is tight', () => {
+    const { lastFrame } = render(
+      <Box width={16}>
+        <KeyHints
+          hints={[
+            { keys: 'esc', label: 'cancel' },
+            { keys: 'enter', label: 'confirm' },
+          ]}
+        />
+      </Box>,
+    )
+    const frame = lastFrame() ?? ''
+    expect(frame).toContain('[esc] cancel')
+    expect(frame).toContain('[enter] confirm')
+  })
+})
+
+describe('Footer borderColor', () => {
+  test('accepts a borderColor override without error', () => {
+    const { lastFrame } = render(
+      <Footer borderColor="magenta">
         <KeyHints hints={[{ keys: 'q', label: 'quit' }]} />
       </Footer>,
     )

@@ -1,10 +1,11 @@
-import { Box, Text } from 'ink'
+import { Box, Text, type TextProps } from 'ink'
 import type { ReactNode } from 'react'
 
 export type IconLineProps = {
   icon: string
-  color?: string
+  color?: TextProps['color']
   dim?: boolean
+  /** Text content rendered inside a single `<Text>`; a `<Box>` child is unsupported (Ink crashes). */
   children: ReactNode
 }
 

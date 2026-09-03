@@ -1,29 +1,64 @@
 import { Select } from '@inkjs/ui'
-import { Box, Text, useInput } from 'ink'
+import { Box, Text, type TextProps, useInput } from 'ink'
 
-export type SelectItem = { label: string; value: string }
+export type SelectItem<T = string> = { label: string; value: T }
 
-export type SelectCardProps = {
+export type SelectCardProps<T = string> = {
   title?: string
-  items: Array<SelectItem>
-  onSelect: (value: string) => void
+  items: Array<SelectItem<T>>
+  onSelect: (value: T) => void
   onCancel?: () => void
   /** Message shown when `items` is empty. */
   emptyMessage?: string
+  /** When false, the card and its list ignore all key input. Defaults to true. */
+  isActive?: boolean
+  /** Title text color. */
+  titleColor?: TextProps['color']
+  /** Border color. */
+  borderColor?: TextProps['color']
 }
 
-/** A bordered single-choice list. Esc cancels (when `onCancel` is provided). */
-export function SelectCard({ title, items, onSelect, onCancel, emptyMessage }: SelectCardProps) {
-  useInput((_input, key) => {
-    if (key.escape) onCancel?.()
-  })
+/**
+ * A bordered single-choice list. Esc cancels (when `onCancel` is provided).
+ *
+ * `items` is treated as a stable list for the card's mount: selection is keyed
+ * by position, so changing `items` (insert/remove/reorder) resets selection,
+ * matching `@inkjs/ui`'s own behavior. An empty list with no `onCancel` is an
+ * intentionally terminal presentational state; the caller controls unmounting.
+ */
+export function SelectCard<T = string>({
+  title,
+  items,
+  onSelect,
+  onCancel,
+  emptyMessage,
+  isActive = true,
+  titleColor = 'cyan',
+  borderColor = 'cyan',
+}: SelectCardProps<T>) {
+  useInput(
+    (_input, key) => {
+      if (key.escape) onCancel?.()
+    },
+    { isActive: isActive && onCancel != null },
+  )
+
+  const options = items.map((item, index) => ({ label: item.label, value: String(index) }))
+
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="cyan">
-      {title != null ? <Text color="cyan">{title}</Text> : null}
+    <Box flexDirection="column" borderStyle="round" borderColor={borderColor}>
+      {title != null ? <Text color={titleColor}>{title}</Text> : null}
       {items.length === 0 ? (
         <Text dimColor>{emptyMessage ?? 'no items'}</Text>
       ) : (
-        <Select options={items} onChange={(value) => onSelect(value)} />
+        <Select
+          isDisabled={!isActive}
+          options={options}
+          onChange={(value) => {
+            const item = items[Number(value)]
+            if (item != null) onSelect(item.value)
+          }}
+        />
       )}
       {onCancel != null ? <Text dimColor>[esc] cancel</Text> : null}
     </Box>

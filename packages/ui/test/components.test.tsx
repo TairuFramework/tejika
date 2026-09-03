@@ -158,6 +158,74 @@ describe('SelectCard', () => {
     )
     expect(lastFrame()).toContain('nothing here')
   })
+
+  test('enter selects the highlighted item', () => {
+    const onSelect = vi.fn()
+    const { stdin } = render(
+      <SelectCard
+        items={[
+          { label: 'alpha', value: 'a' },
+          { label: 'beta', value: 'b' },
+        ]}
+        onSelect={onSelect}
+      />,
+    )
+    act(() => stdin.write('\r'))
+    expect(onSelect).toHaveBeenCalledWith('a')
+  })
+
+  test('arrow-down then enter selects the second item', () => {
+    const onSelect = vi.fn()
+    const { stdin } = render(
+      <SelectCard
+        items={[
+          { label: 'alpha', value: 'a' },
+          { label: 'beta', value: 'b' },
+        ]}
+        onSelect={onSelect}
+      />,
+    )
+    act(() => stdin.write('\x1b[B'))
+    act(() => stdin.write('\r'))
+    expect(onSelect).toHaveBeenCalledWith('b')
+  })
+
+  test('a non-string generic value round-trips through onSelect', () => {
+    const onSelect = vi.fn<(value: number) => void>()
+    const { stdin } = render(
+      <SelectCard
+        items={[
+          { label: 'one', value: 1 },
+          { label: 'two', value: 2 },
+        ]}
+        onSelect={onSelect}
+      />,
+    )
+    act(() => stdin.write('\x1b[B'))
+    act(() => stdin.write('\r'))
+    expect(onSelect).toHaveBeenCalledWith(2)
+  })
+
+  test('esc cancels when onCancel is provided', () => {
+    vi.useFakeTimers()
+    const onCancel = vi.fn()
+    const { stdin } = render(
+      <SelectCard items={[{ label: 'a', value: 'a' }]} onSelect={noop} onCancel={onCancel} />,
+    )
+    stdin.write('\x1b')
+    vi.runAllTimers()
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  test('isActive={false} does not select on enter', () => {
+    const onSelect = vi.fn()
+    const { stdin } = render(
+      <SelectCard isActive={false} items={[{ label: 'a', value: 'a' }]} onSelect={onSelect} />,
+    )
+    act(() => stdin.write('\r'))
+    expect(onSelect).not.toHaveBeenCalled()
+  })
 })
 
 describe('Spinner', () => {

@@ -3,6 +3,10 @@
 Integration-test primitives for CLIs built on the `@tejika/*` stack. Install
 as a devDependency.
 
+```sh
+pnpm add -D @tejika/test
+```
+
 - `PTYDriver` — drive a real terminal app over node-pty (Ink needs a TTY on
   stdin). Buffered `screen()` with ANSI stripped, `waitFor*` polling,
   windowed reads (`mark`/`screenSince`/`screenAfterLast`), key helpers,

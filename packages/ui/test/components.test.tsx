@@ -228,6 +228,36 @@ describe('SelectCard', () => {
   })
 })
 
+describe('input isolation (H8)', () => {
+  test('active ConfirmCard + inactive SelectCard: enter confirms only', () => {
+    const onConfirm = vi.fn()
+    const onSelect = vi.fn()
+    const { stdin } = render(
+      <>
+        <ConfirmCard message="?" isActive onConfirm={onConfirm} onCancel={noop} />
+        <SelectCard isActive={false} items={[{ label: 'a', value: 'a' }]} onSelect={onSelect} />
+      </>,
+    )
+    act(() => stdin.write('\r'))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  test('inactive ConfirmCard + active SelectCard: enter selects only', () => {
+    const onConfirm = vi.fn()
+    const onSelect = vi.fn()
+    const { stdin } = render(
+      <>
+        <ConfirmCard message="?" isActive={false} onConfirm={onConfirm} onCancel={noop} />
+        <SelectCard isActive items={[{ label: 'a', value: 'a' }]} onSelect={onSelect} />
+      </>,
+    )
+    act(() => stdin.write('\r'))
+    expect(onSelect).toHaveBeenCalledWith('a')
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+})
+
 describe('Spinner', () => {
   test('renders the label and elapsed seconds', () => {
     const { lastFrame } = render(<Spinner label="loading" elapsedMs={3000} />)

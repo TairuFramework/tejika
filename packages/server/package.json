@@ -11,7 +11,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/TairuFramework/tejika",
+    "url": "git+https://github.com/TairuFramework/tejika.git",
     "directory": "packages/server"
   },
   "license": "MIT",

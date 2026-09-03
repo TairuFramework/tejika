@@ -1,7 +1,7 @@
 import { Box } from 'ink'
 import { render } from 'ink-testing-library'
 import { act } from 'react'
-import { describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { ConfirmCard } from '../src/ConfirmCard.js'
 import { Footer } from '../src/Footer.js'
@@ -12,6 +12,13 @@ import { Spinner } from '../src/Spinner.js'
 import { SystemNotice } from '../src/SystemNotice.js'
 
 const noop = (): void => {}
+
+// Failure-safe restore: if an assertion between vi.useFakeTimers() and
+// vi.useRealTimers() throws, this prevents fake timers from leaking into
+// later tests. Safe to call when real timers are already active.
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('IconLine', () => {
   test('renders the icon and child text', () => {
@@ -135,6 +142,36 @@ describe('ConfirmCard', () => {
     expect(() => act(() => stdin.write('n'))).not.toThrow()
     expect(lastFrame()).toContain('alive')
   })
+
+  test('a rejecting onCancel does not raise an unhandled rejection', async () => {
+    const onRejection = vi.fn()
+    process.on('unhandledRejection', onRejection)
+    const { stdin } = render(
+      <ConfirmCard
+        message="?"
+        onConfirm={vi.fn()}
+        onCancel={() => Promise.reject(new Error('boom'))}
+      />,
+    )
+    act(() => stdin.write('n'))
+    await new Promise((resolve) => setImmediate(resolve))
+    process.off('unhandledRejection', onRejection)
+    expect(onRejection).not.toHaveBeenCalled()
+  })
+
+  test('a synchronous throw from onConfirm does not escape the handler', () => {
+    const { stdin, lastFrame } = render(
+      <ConfirmCard
+        message="alive"
+        onConfirm={() => {
+          throw new Error('boom')
+        }}
+        onCancel={vi.fn()}
+      />,
+    )
+    expect(() => act(() => stdin.write('y'))).not.toThrow()
+    expect(lastFrame()).toContain('alive')
+  })
 })
 
 describe('SelectCard', () => {
@@ -227,6 +264,25 @@ describe('SelectCard', () => {
     act(() => stdin.write('\r'))
     expect(onSelect).not.toHaveBeenCalled()
   })
+
+  test('esc is a no-op when onCancel is absent', () => {
+    vi.useFakeTimers()
+    const onSelect = vi.fn()
+    const { stdin } = render(
+      <SelectCard
+        items={[
+          { label: 'alpha', value: 'a' },
+          { label: 'beta', value: 'b' },
+        ]}
+        onSelect={onSelect}
+      />,
+    )
+    expect(() => {
+      stdin.write('\x1b')
+      vi.runAllTimers()
+    }).not.toThrow()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
 })
 
 describe('input isolation (H8)', () => {
@@ -244,17 +300,25 @@ describe('input isolation (H8)', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
-  test('inactive ConfirmCard + active SelectCard: enter selects only', () => {
+  test('inactive ConfirmCard + active SelectCard: arrow+enter selects only', () => {
     const onConfirm = vi.fn()
     const onSelect = vi.fn()
     const { stdin } = render(
       <>
         <ConfirmCard message="?" isActive={false} onConfirm={onConfirm} onCancel={noop} />
-        <SelectCard isActive items={[{ label: 'a', value: 'a' }]} onSelect={onSelect} />
+        <SelectCard
+          isActive
+          items={[
+            { label: 'alpha', value: 'a' },
+            { label: 'beta', value: 'b' },
+          ]}
+          onSelect={onSelect}
+        />
       </>,
     )
+    act(() => stdin.write('\x1b[B'))
     act(() => stdin.write('\r'))
-    expect(onSelect).toHaveBeenCalledWith('a')
+    expect(onSelect).toHaveBeenCalledWith('b')
     expect(onConfirm).not.toHaveBeenCalled()
   })
 })

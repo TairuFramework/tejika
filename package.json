@@ -8,16 +8,18 @@
     "build": "pnpm run build:types && pnpm run build:js",
     "build:ci": "pnpm run build:types:ci && pnpm run build:js",
     "build:js": "turbo run build:js",
-    "build:types": "pnpm run -r build:types",
+    "build:types": "turbo run build:types",
     "build:types:ci": "pnpm run -r build:types:ci",
+    "format": "biome format --write .",
     "lint": "biome check --write ./packages",
     "lint:ci": "biome ci .",
     "prepare": "git config core.hooksPath .githooks",
     "release": "pnpm run build:ci && pnpm publish -r",
-    "test": "turbo run test"
+    "test": "turbo run test:types test:unit",
+    "test:types": "turbo run test:types"
   },
   "devDependencies": {
-    "@kigu/dev": "^0.3.0"
+    "@kigu/dev": "^0.3.1"
   },
   "packageManager": "pnpm@11.25.0"
 }

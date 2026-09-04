@@ -10,7 +10,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Type checking..."
-pnpm -r run test:types
+pnpm run test:types
 if [ $? -ne 0 ]; then
   echo "Type check failed. Fix errors before committing."
   exit 1

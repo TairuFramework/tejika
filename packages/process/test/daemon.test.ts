@@ -128,10 +128,13 @@ describe('runDaemon', () => {
   // bind is what fails — so it is the only test that can catch a boot that leaves a
   // `ready: false` corpse behind for the next booter to trip over.
   test('removes the record it wrote when the bind itself fails', async () => {
-    // A `sun_path` longer than the AF_UNIX limit (~104 bytes on darwin): `listen` fails
-    // with EINVAL, deterministically, with no dependence on timing or permissions.
-    const tooLongSocketPath = join(dir, `${'s'.repeat(120)}.sock`)
-    expect(Buffer.byteLength(tooLongSocketPath)).toBeGreaterThan(104)
+    // A socket path no `sockaddr_un` can hold: `listen` fails with EINVAL, deterministically,
+    // with no dependence on timing or permissions. The bound is the kernel's, not Node's —
+    // Node 26 binds up to ~253 bytes on darwin, whose `sun_len` is a uint8 (255 max), and
+    // Linux caps `sun_path` at 108. Each component stays under NAME_MAX (255) so the
+    // failure is the bind, not ENAMETOOLONG from `mkdirSync`.
+    const tooLongSocketPath = join(dir, 's'.repeat(200), `${'s'.repeat(100)}.sock`)
+    expect(Buffer.byteLength(tooLongSocketPath)).toBeGreaterThan(255)
     await expect(boot({ socketPath: tooLongSocketPath })).rejects.toThrow()
     expect(readDaemonState(pidPath)).toBeNull()
   })

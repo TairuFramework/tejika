@@ -76,16 +76,27 @@ await client.dispose()
 ```ts
 import { stopDaemon } from '@tejika/process'
 
-const result = await stopDaemon({ app: 'my-app' })
+const result = await stopDaemon({ app: 'my-app', expectedSocketPath: socketPath })
 if (!result.stopped) {
-  // 'not-running' | 'not-owned' | 'timeout' | 'aborted' | 'busy' | 'error'
+  // 'not-running' | 'not-owned' | 'socket-mismatch' | 'timeout' | 'aborted' | 'busy' | 'error'
   console.log(result.reason)
+} else if (result.forced) {
+  console.log('daemon ignored SIGTERM and was killed')
 }
 ```
 
 `stopDaemon` never throws — every outcome, including an unexpected errno from the
 kill itself (`reason: 'error'`, with the failure on `result.error`), comes back as
 a `StopResult`.
+
+`expectedSocketPath` guards a caller that selects a daemon by socket rather than by
+pid file: the record's socket path is compared (after `path.resolve`) inside the
+boot/stop mutex, and a running daemon serving another socket is not signalled —
+`reason: 'socket-mismatch'`. Stale and abandoned records are still reaped.
+
+When the stop waited for exit, `forced` reports whether `SIGKILL` escalation was
+needed (`true`) or the daemon exited on `SIGTERM` (`false`). It is omitted with
+`waitForExit: false` and on every `stopped: false` outcome.
 
 ## Breaking changes
 

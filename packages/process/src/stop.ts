@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { TimeoutInterruption, withFileLock } from '@sozai/lock'
 import { getPIDPath } from '@tejika/env'
@@ -9,7 +10,19 @@ import { classifyState } from './status.js'
 export type StopResult = {
   stopped: boolean
   pid?: number
-  reason?: 'not-running' | 'not-owned' | 'timeout' | 'aborted' | 'busy' | 'error'
+  reason?:
+    | 'not-running'
+    | 'not-owned'
+    | 'socket-mismatch'
+    | 'timeout'
+    | 'aborted'
+    | 'busy'
+    | 'error'
+  /**
+   * Only on a waited stop (`stopped: true`, `waitForExit` not false): true when the process
+   * outlived `killTimeoutMs` and was SIGKILLed, false when it exited on SIGTERM.
+   */
+  forced?: boolean
   /** Only with `reason: 'error'`: the failure `stopDaemon` refused to throw. */
   error?: unknown
 }
@@ -23,6 +36,13 @@ export type StopDaemonOptions = {
   lockTimeoutMs?: number
   /** Poll until the process exits, escalating to SIGKILL. Default true. */
   waitForExit?: boolean
+  /**
+   * Only signal a running daemon whose record names this socket (compared after `resolve`).
+   * Checked under the mutex, so a daemon replaced since the caller's lock-free
+   * `getDaemonStatus` is not signalled: `reason: 'socket-mismatch'`. Stale or abandoned
+   * records are reaped regardless.
+   */
+  expectedSocketPath?: string
   killTimeoutMs?: number
   signal?: AbortSignal
 }
@@ -119,6 +139,12 @@ async function stopLocked(pidPath: string, opts: StopDaemonOptions): Promise<Sto
     if (status.state === 'running-not-owned') {
       return { stopped: false, pid, reason: 'not-owned' }
     }
+    if (
+      opts.expectedSocketPath != null &&
+      resolve(opts.expectedSocketPath) !== resolve(status.socketPath)
+    ) {
+      return { stopped: false, pid, reason: 'socket-mismatch' }
+    }
 
     const killTimeoutMs = opts.killTimeoutMs ?? DEFAULT_KILL_TIMEOUT_MS
     const early = signalTolerantly(pid, 'SIGTERM')
@@ -131,14 +157,15 @@ async function stopLocked(pidPath: string, opts: StopDaemonOptions): Promise<Sto
 
     if (await pollUntilGone(pid, createDeadline(killTimeoutMs, opts.signal))) {
       removeDaemonState(pidPath)
-      return { stopped: true, pid }
+      return { stopped: true, pid, forced: false }
     }
 
     const escalated = signalTolerantly(pid, 'SIGKILL')
     if (escalated != null && !escalated.stopped) return escalated
     if (await pollUntilGone(pid, createDeadline(SIGKILL_GRACE_MS, opts.signal))) {
       removeDaemonState(pidPath)
-      return { stopped: true, pid }
+      // ESRCH on SIGKILL (`escalated` non-null): it exited on its own before the kill landed.
+      return { stopped: true, pid, forced: escalated == null }
     }
     return { stopped: false, pid, reason: 'timeout' }
   } catch (err) {

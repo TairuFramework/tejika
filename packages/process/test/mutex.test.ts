@@ -147,7 +147,7 @@ test('a stop and a boot never interleave', { timeout: 30_000 }, async () => {
 
   try {
     const stopped = await stopping
-    expect(stopped).toEqual({ stopped: true, pid: childPID })
+    expect(stopped).toEqual({ stopped: true, pid: childPID, forced: false })
     // A blocking cleanup in the daemon would make this ~5s (killTimeoutMs) or ~7s (plus the
     // SIGKILL grace) rather than a prompt SIGTERM shutdown.
     expect(Date.now() - started).toBeLessThan(3_000)

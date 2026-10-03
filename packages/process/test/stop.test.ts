@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process'
+import { type ChildProcess, spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { acquireFileLock } from '@sozai/lock'
@@ -173,6 +173,7 @@ describe('stopDaemon', () => {
       await expect(stopDaemon({ app: APP, pidPath })).resolves.toEqual({
         stopped: true,
         pid: child.pid,
+        forced: false,
       })
       expect(existsSync(pidPath)).toBe(false)
     } finally {
@@ -245,6 +246,93 @@ describe('stopDaemon', () => {
 
       expect(result).toEqual({ stopped: false, pid: child.pid, reason: 'aborted' })
       expect(Date.now() - started).toBeLessThan(2000)
+    } finally {
+      child.kill('SIGKILL')
+    }
+  })
+
+  // A real daemon bound to `socketPath`, recorded `ready: true` so it classifies as `running`.
+  async function spawnDaemon(opts: { ignoreSIGTERM?: boolean } = {}): Promise<ChildProcess> {
+    const onTerm = opts.ignoreSIGTERM === true ? 'process.on("SIGTERM", () => {}); ' : ''
+    const child = spawn(
+      process.execPath,
+      [
+        '-e',
+        `${onTerm}require('net').createServer().listen(${JSON.stringify(socketPath)}, () => console.log('listening'))`,
+      ],
+      { stdio: ['ignore', 'pipe', 'ignore'] },
+    )
+    await new Promise<void>((resolve) => child.stdout?.once('data', () => resolve()))
+    writeDaemonState(pidPath, {
+      pid: child.pid as number,
+      socketPath,
+      startedAt: Date.now(),
+      ready: true,
+    })
+    return child
+  }
+
+  // The identity check runs inside the mutex: a caller that read the record lock-free and
+  // selected a daemon by socket must not signal a replacement serving another socket.
+  test('a running daemon on another socket than expectedSocketPath is not signalled', async () => {
+    const child = await spawnDaemon()
+    try {
+      await expect(
+        stopDaemon({ app: APP, pidPath, expectedSocketPath: join(dir, 'other.sock') }),
+      ).resolves.toEqual({ stopped: false, pid: child.pid, reason: 'socket-mismatch' })
+      expect(existsSync(pidPath)).toBe(true)
+      await delay(200)
+      expect(() => process.kill(child.pid as number, 0)).not.toThrow()
+    } finally {
+      child.kill('SIGKILL')
+    }
+  })
+
+  test('expectedSocketPath is compared after resolving, so a relative path matches', async () => {
+    const child = await spawnDaemon()
+    try {
+      await expect(
+        stopDaemon({ app: APP, pidPath, expectedSocketPath: relative(process.cwd(), socketPath) }),
+      ).resolves.toEqual({ stopped: true, pid: child.pid, forced: false })
+      expect(existsSync(pidPath)).toBe(false)
+    } finally {
+      child.kill('SIGKILL')
+    }
+  })
+
+  // A dead record is reaped whatever socket it names: reporting a mismatch would suggest
+  // another daemon is alive.
+  test('a stale record is reaped even when its socket differs from expectedSocketPath', async () => {
+    const deadPID = 2 ** 22
+    writeDaemonState(pidPath, { pid: deadPID, socketPath, startedAt: Date.now(), ready: true })
+    await expect(
+      stopDaemon({ app: APP, pidPath, expectedSocketPath: join(dir, 'other.sock') }),
+    ).resolves.toEqual({ stopped: false, pid: deadPID, reason: 'not-running' })
+    expect(existsSync(pidPath)).toBe(false)
+  })
+
+  test('a daemon ignoring SIGTERM is escalated to SIGKILL and reports forced: true', async () => {
+    const child = await spawnDaemon({ ignoreSIGTERM: true })
+    try {
+      await expect(stopDaemon({ app: APP, pidPath, killTimeoutMs: 200 })).resolves.toEqual({
+        stopped: true,
+        pid: child.pid,
+        forced: true,
+      })
+      expect(existsSync(pidPath)).toBe(false)
+    } finally {
+      child.kill('SIGKILL')
+    }
+  })
+
+  // Without waiting, the outcome of the SIGTERM is unknown: `forced` is omitted.
+  test('waitForExit: false omits forced', async () => {
+    const child = await spawnDaemon()
+    try {
+      await expect(stopDaemon({ app: APP, pidPath, waitForExit: false })).resolves.toEqual({
+        stopped: true,
+        pid: child.pid,
+      })
     } finally {
       child.kill('SIGKILL')
     }

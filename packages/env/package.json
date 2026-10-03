@@ -1,6 +1,6 @@
 {
   "name": "@tejika/env",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Local paths, ports and env-var overrides for CLI tools and daemons",
   "keywords": [
     "env",

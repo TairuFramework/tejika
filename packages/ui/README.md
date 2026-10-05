@@ -14,6 +14,9 @@ pnpm add @tejika/ui ink react
 - `KeyHints` / `Footer` — a row of `KeyHint` key/label pairs, and a footer wrapper.
 - `IconLine` — an icon-prefixed line of text.
 - `Spinner` — a standalone spinner.
+- `ExitOnAbort` — exits the Ink app when an `AbortSignal` aborts.
+- `InterruptOnCtrlC` — calls a handler on Ctrl+C (default: re-raise `SIGINT`)
+  instead of exiting at once; use with `exitOnCtrlC: false`.
 - `SystemNotice` — a variant-styled notice block (`SystemNoticeVariant`).
 
 ```tsx

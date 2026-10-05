@@ -1,6 +1,8 @@
 export { ConfirmCard, type ConfirmCardProps } from './ConfirmCard.js'
+export { ExitOnAbort, type ExitOnAbortProps } from './ExitOnAbort.js'
 export { Footer, type FooterProps } from './Footer.js'
 export { IconLine, type IconLineProps } from './IconLine.js'
+export { InterruptOnCtrlC, type InterruptOnCtrlCProps } from './InterruptOnCtrlC.js'
 export { type KeyHint, KeyHints, type KeyHintsProps } from './KeyHints.js'
 export { SelectCard, type SelectCardProps, type SelectItem } from './SelectCard.js'
 export { Spinner, type SpinnerProps } from './Spinner.js'

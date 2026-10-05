@@ -21,6 +21,10 @@
     ".": {
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
+    },
+    "./follow": {
+      "types": "./lib/follow.d.ts",
+      "default": "./lib/follow.js"
     }
   },
   "main": "lib/index.js",
@@ -50,6 +54,11 @@
   },
   "peerDependencies": {
     "@logtape/logtape": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@logtape/logtape": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=24"

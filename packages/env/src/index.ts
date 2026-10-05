@@ -1,3 +1,4 @@
+export { expandHome, type ReadJSONFileOptions, readJSONFile } from './config-file.js'
 export { appEnvVar, getAppEnvVar } from './env-var.js'
 export {
   getDataDir,

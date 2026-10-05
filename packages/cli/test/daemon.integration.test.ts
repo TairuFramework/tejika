@@ -20,6 +20,7 @@ const saved = { ...process.env }
 
 // Short base: a unix socket path must stay under the `sun_path` limit.
 beforeEach(() => {
+  if (process.platform === 'win32') return
   dir = mkdtempSync('/tmp/tcli-')
   pidPath = join(dir, 'custom.pid')
   socketPath = join(dir, 'd.sock')
@@ -38,6 +39,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  if (process.platform === 'win32') return
   vi.restoreAllMocks()
   await stopDaemon({ app: APP, pidPath, killTimeoutMs: 5_000 }).catch(() => {})
   process.env = { ...saved }
@@ -60,7 +62,9 @@ async function run(...args: Array<string>): Promise<void> {
 
 const paths = () => ['--socket-path', socketPath, '--pid-path', pidPath]
 
-describe('createDaemonCommand', () => {
+// The daemon IPC layer is POSIX-only for now (see the Windows daemon IPC backlog plan), and
+// `/tmp` plus `.sock` files do not exist on Windows.
+describe.skipIf(process.platform === 'win32')('createDaemonCommand', () => {
   test('start, status, stop and restart honor a custom --pid-path', {
     timeout: 60_000,
   }, async () => {

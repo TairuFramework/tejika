@@ -114,7 +114,13 @@ describe.skipIf(process.platform === 'win32')('createDaemonCommand', () => {
     await run('stop', '--socket-path', join(dir, 'other.sock'), '--pid-path', pidPath)
     expect(errors.join('')).toContain('not the selected socket')
     expect(process.exitCode).toBe(1)
-    expect((await getDaemonStatus({ app: APP, pidPath })).state).toBe('running')
+    // The daemon may still be `booting` right after the socket is ready on a slow runner.
+    await vi.waitFor(
+      async () => {
+        expect((await getDaemonStatus({ app: APP, pidPath })).state).toBe('running')
+      },
+      { timeout: 10_000 },
+    )
   })
 
   test('start fails fast when the daemon cannot boot', { timeout: 30_000 }, async () => {

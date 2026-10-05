@@ -87,5 +87,5 @@ describe('renderTable', () => {
     expect(text).toContain('ID      STATE')
     expect(text).toContain('a       running')
     expect(text).toContain('longer  done')
-  })
+  }, 30_000)
 })

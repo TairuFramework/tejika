@@ -57,7 +57,7 @@ describe('spawnCLI', () => {
   test('exposes output while running, accepts a signal, and settles on exit', async () => {
     const spawned = spawnCLI([
       '-e',
-      'console.log("ready"); process.on("SIGTERM", () => { console.log("bye"); process.exit(3) }); setInterval(() => {}, 1000)',
+      'process.on("SIGTERM", () => { console.log("bye"); process.exit(3) }); console.log("ready"); setInterval(() => {}, 1000)',
     ])
     await vi.waitFor(() => expect(spawned.stdout()).toContain('ready'), { timeout: 5_000 })
     spawned.child.kill('SIGTERM')

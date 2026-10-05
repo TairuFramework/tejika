@@ -58,4 +58,4 @@ jobs:
       - name: Unit tests (Windows-ready packages)
         if: runner.os == 'Windows'
         shell: bash
-        run: pnpm exec turbo run test --filter=!@tejika/process --filter=!@tejika/test
+        run: pnpm exec turbo run test:types test:unit --filter=!@tejika/process --filter=!@tejika/test

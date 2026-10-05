@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { getLogDir } from '@tejika/env'
-import { followLog } from '@tejika/log/follow'
 import { getDaemonStatus, spawnDaemon, stopDaemon } from '@tejika/process'
 import { Command } from 'commander'
 
@@ -265,6 +264,8 @@ export function createDaemonCommand(options: CreateDaemonCommandOptions): Comman
     if (tail !== '') process.stdout.write(`${tail}\n`)
     if (!logOptions.follow) return
     try {
+      // Loaded on demand: `@tejika/log` needs its `@logtape/logtape` peer, which only `--follow` uses.
+      const { followLog } = await import('@tejika/log')
       await withCommandSignal((signal) =>
         followLog(logPath, { signal, start: Buffer.byteLength(content) }),
       )

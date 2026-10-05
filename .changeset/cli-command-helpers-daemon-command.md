@@ -9,7 +9,6 @@
 a generic `daemon start|stop|status|restart|logs` group over `@tejika/process`. All subcommands
 honor a custom `--pid-path`. `@tejika/cli` now depends on `@tejika/process` and `@tejika/log`.
 
-`@tejika/log`: add `followLog(path, { signal })` (also `@tejika/log/follow`). `@logtape/logtape`
-is now an optional peer dependency, since `followLog` does not use it.
+`@tejika/log`: add `followLog(path, { signal })`.
 
 `@tejika/ui`: add `ExitOnAbort` and `InterruptOnCtrlC`.

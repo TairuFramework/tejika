@@ -9,3 +9,4 @@ export {
   type FileSinkOptions,
   type FileSinkRotation,
 } from './file-sink.js'
+export { type FollowLogOptions, followLog } from './follow.js'

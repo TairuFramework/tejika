@@ -16,6 +16,9 @@ pnpm add @tejika/env
   the `<APP>_PORT` override.
 - `appEnvVar` / `getAppEnvVar` — build and read an `<APP>_<KEY>` variable name.
 - `isNamedPipe` — test whether a socket path is a win32 named pipe.
+- `expandHome` — expand a leading `~` or `~/…` to the home directory.
+- `readJSONFile` — read and parse a JSON file; returns `{ default }` on `ENOENT`,
+  throws an error naming the path on any other read or parse failure.
 
 ```ts
 import { getSocketPath, getPort } from '@tejika/env'

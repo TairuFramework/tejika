@@ -2,6 +2,9 @@ import { getDaemonStatus } from '@tejika/process'
 
 import { poll } from './poll.js'
 
+// For other waits (e.g. "until a daemon snapshot matches"), use `poll` directly: return a truthy
+// value from the condition; `undefined` comes back on timeout.
+
 export type WaitForDaemonOptions = {
   /**
    * Explicit pidfile path: a test profile's env overrides are not visible to

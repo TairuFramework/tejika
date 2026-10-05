@@ -2,10 +2,22 @@
   dir: packages/cli
   intents:
     - lazy-seals-juggle
+"@tejika/cli@0.4.2":
+  dir: packages/cli
+  intents:
+    - cli-command-helpers-daemon-command
 "@tejika/env@0.5.0":
   dir: packages/env
   intents:
     - violet-teams-jam
+"@tejika/env@0.5.2":
+  dir: packages/env
+  intents:
+    - env-config-file-helpers
+"@tejika/log@0.4.1":
+  dir: packages/log
+  intents:
+    - cli-command-helpers-daemon-command
 "@tejika/process@0.5.0":
   dir: packages/process
   intents:
@@ -18,7 +30,15 @@
   dir: packages/test
   intents:
     - lazy-seals-juggle
+"@tejika/test@0.4.2":
+  dir: packages/test
+  intents:
+    - test-spawn-cli-base-dir
 "@tejika/ui@0.4.1":
   dir: packages/ui
   intents:
     - lazy-seals-juggle
+"@tejika/ui@0.4.2":
+  dir: packages/ui
+  intents:
+    - cli-command-helpers-daemon-command

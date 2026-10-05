@@ -14,6 +14,8 @@ pnpm add @tejika/log @logtape/logtape
 - `createFileLogConfig` — build a whole logtape `Config` from a list of file
   targets (each with its own category and level), plus an optional console sink.
   The builder is pure: it never touches logtape's process-global state.
+- `followLog` — tail a log file until an `AbortSignal` aborts, re-reading from
+  the start after truncation.
 
 ```ts
 import { configure } from '@logtape/logtape'

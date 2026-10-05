@@ -11,6 +11,11 @@ export type TestProfileOptions = {
   keys?: Array<string>
   /** Extra env entries; win over the key-derived ones. */
   extraEnv?: Record<string, string>
+  /**
+   * Parent directory of the profile dir. Defaults to `/tmp` on darwin, where `tmpdir()` is long
+   * enough to push a daemon unix socket past the `sun_path` limit, else `tmpdir()`.
+   */
+  baseDir?: string
   /** Runs at dispose before the dir is removed — stop any daemon here. */
   onDispose?: (profile: TestProfileEnv) => Promise<void> | void
 }
@@ -26,8 +31,13 @@ let counter = 0
  * profiles in one worker from colliding.
  */
 export function createTestProfile(app: string, options: TestProfileOptions = {}): TestProfile {
-  const { keys = ['DATA_DIR', 'STATE_DIR'], extraEnv, onDispose } = options
-  const dir = join(tmpdir(), `${app}-it-${process.pid}-${counter++}`)
+  const {
+    keys = ['DATA_DIR', 'STATE_DIR'],
+    extraEnv,
+    onDispose,
+    baseDir = process.platform === 'darwin' ? '/tmp' : tmpdir(),
+  } = options
+  const dir = join(baseDir, `${app}-it-${process.pid}-${counter++}`)
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(dir, { recursive: true })
   const env = { ...process.env } as Record<string, string>

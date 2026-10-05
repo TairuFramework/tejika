@@ -2,7 +2,13 @@ import { dirname, join } from 'node:path'
 import { Command } from 'commander'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
-import { DEFAULT_LOG_LEVELS, withLogLevel, withPort, withSocketPath } from '../src/options.js'
+import {
+  DEFAULT_LOG_LEVELS,
+  withLogLevel,
+  withPIDPath,
+  withPort,
+  withSocketPath,
+} from '../src/options.js'
 
 afterEach(() => {
   delete process.env.MYAPP_PORT
@@ -223,5 +229,24 @@ describe('withLogLevel', () => {
     const opt = cmd.options.find((o) => o.long === '--log-level')
     expect(opt).toBeDefined()
     expect(opt?.defaultValue).toBe('warning')
+  })
+})
+
+describe('withPIDPath', () => {
+  test('defaults lazily to the env pid path and honors an explicit value', async () => {
+    const app = 'tejika-pid-opt'
+    const program = new Command().exitOverride()
+    const seen: Array<string> = []
+    withPIDPath(program.command('go'), app).action((_opts, cmd: Command) => {
+      seen.push(cmd.opts().pidPath)
+    })
+    process.env.TEJIKA_PID_OPT_PID_PATH = '/tmp/from-env.pid'
+    try {
+      await program.parseAsync(['go'], { from: 'user' })
+      await program.parseAsync(['go', '--pid-path', '/tmp/explicit.pid'], { from: 'user' })
+    } finally {
+      delete process.env.TEJIKA_PID_OPT_PID_PATH
+    }
+    expect(seen).toEqual(['/tmp/from-env.pid', '/tmp/explicit.pid'])
   })
 })

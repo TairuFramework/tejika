@@ -1,4 +1,4 @@
-import { getPort, getSocketPath, parsePort, resolvePort } from '@tejika/env'
+import { getPIDPath, getPort, getSocketPath, parsePort, resolvePort } from '@tejika/env'
 import { type Command, InvalidArgumentError, Option } from 'commander'
 
 export type WithSocketPathOptions = {
@@ -134,4 +134,19 @@ export function withLogLevel(cmd: Command, opts: WithLogLevelOptions = {}): Comm
     .choices(levels)
     .default(defaultLevel)
   return cmd.addOption(option)
+}
+
+/**
+ * Add `--pid-path <path>`. Like `withSocketPath`, the default is resolved lazily from
+ * `@tejika/env` at action time, so a `<APP>_PID_PATH` override set after the program is built is
+ * still honored.
+ */
+export function withPIDPath(cmd: Command, app: string): Command {
+  cmd.option('--pid-path <path>', 'daemon pid file path')
+  cmd.hook('preAction', (thisCmd) => {
+    if (thisCmd.opts().pidPath == null) {
+      thisCmd.setOptionValue('pidPath', getPIDPath(app))
+    }
+  })
+  return cmd
 }

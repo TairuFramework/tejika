@@ -1,4 +1,6 @@
 import { existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname } from 'node:path'
 import { describe, expect, test } from 'vitest'
 
 import { createTestProfile } from '../src/profile.js'
@@ -41,5 +43,16 @@ describe('createTestProfile', () => {
     expect(hookDir).toBe(profile.dir)
     expect(dirExistedInHook).toBe(true)
     expect(existsSync(profile.dir)).toBe(false)
+  })
+
+  test('baseDir sets the parent of the profile dir', async () => {
+    const base = tmpdir()
+    await using profile = createTestProfile('my-app', { baseDir: base })
+    expect(dirname(profile.dir)).toBe(base)
+  })
+
+  test('defaults to a short path on darwin', async () => {
+    await using profile = createTestProfile('my-app')
+    expect(dirname(profile.dir)).toBe(process.platform === 'darwin' ? '/tmp' : tmpdir())
   })
 })

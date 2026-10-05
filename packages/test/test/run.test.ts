@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 
-import { runCLI } from '../src/run.js'
+import { CLITimeoutError, runCLI, spawnCLI } from '../src/run.js'
 
 describe('runCLI', () => {
   test('collects stdout, stderr, and the exit code', async () => {
@@ -34,5 +34,41 @@ describe('runCLI', () => {
   test('does not crash when the child exits before draining a large stdin', async () => {
     const result = await runCLI(['-e', 'process.exit(0)'], { input: 'x'.repeat(5 * 1024 * 1024) })
     expect(result.code).toBe(0)
+  })
+
+  test('timeoutMs kills the child and rejects with the output so far', async () => {
+    const started = Date.now()
+    const error = await runCLI(['-e', 'console.log("started"); setInterval(() => {}, 1000)'], {
+      timeoutMs: 500,
+    }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(CLITimeoutError)
+    expect((error as CLITimeoutError).stdout).toContain('started')
+    expect((error as CLITimeoutError).message).toContain('timed out after 500ms')
+    expect(Date.now() - started).toBeLessThan(5_000)
+  })
+
+  test('timeoutMs does not fire for a run that finishes in time', async () => {
+    const result = await runCLI(['-e', 'console.log("ok")'], { timeoutMs: 10_000 })
+    expect(result.stdout).toBe('ok\n')
+  })
+})
+
+describe('spawnCLI', () => {
+  test('exposes output while running, accepts a signal, and settles on exit', async () => {
+    const spawned = spawnCLI([
+      '-e',
+      'process.on("SIGTERM", () => { console.log("bye"); process.exit(3) }); console.log("ready"); setInterval(() => {}, 1000)',
+    ])
+    await vi.waitFor(() => expect(spawned.stdout()).toContain('ready'), { timeout: 5_000 })
+    spawned.child.kill('SIGTERM')
+    const result = await spawned.done
+    expect(result.stdout).toBe('ready\nbye\n')
+    expect(result.code).toBe(3)
+  })
+
+  test('a timeout does not raise an unhandled rejection when done is never awaited', async () => {
+    const spawned = spawnCLI(['-e', 'setInterval(() => {}, 1000)'], { timeoutMs: 200 })
+    await new Promise((r) => setTimeout(r, 600))
+    expect(spawned.child.killed).toBe(true)
   })
 })

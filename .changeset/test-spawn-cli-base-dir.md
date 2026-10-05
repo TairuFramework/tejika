@@ -1,5 +1,5 @@
 ---
-"@tejika/test": minor
+"@tejika/test": patch
 ---
 
 Add `spawnCLI(args, options)`, returning `{ child, stdout(), stderr(), done }` so a test can

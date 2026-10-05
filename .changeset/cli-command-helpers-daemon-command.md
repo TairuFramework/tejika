@@ -1,7 +1,7 @@
 ---
-"@tejika/cli": minor
-"@tejika/log": minor
-"@tejika/ui": minor
+"@tejika/cli": patch
+"@tejika/log": patch
+"@tejika/ui": patch
 ---
 
 `@tejika/cli`: add `withCommandSignal`, `addJSONOption`, `printJSON`, `printNDJSON`,

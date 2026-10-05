@@ -1,5 +1,5 @@
 ---
-"@tejika/env": minor
+"@tejika/env": patch
 ---
 
 Add `expandHome(path)` and `readJSONFile(path, { default })` for config file loading. A missing

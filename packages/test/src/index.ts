@@ -7,5 +7,13 @@ export {
   type TestProfileOptions,
 } from './profile.js'
 export { PTYDriver, type PTYDriverOptions, type PTYExit } from './pty.js'
-export { type CLIResult, type RunCLIOptions, runCLI } from './run.js'
+export {
+  type CLIResult,
+  CLITimeoutError,
+  type RunCLIOptions,
+  runCLI,
+  type SpawnCLIOptions,
+  type SpawnedCLI,
+  spawnCLI,
+} from './run.js'
 export { assertBuilt, rebuild } from './setup.js'

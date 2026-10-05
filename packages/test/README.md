@@ -11,14 +11,21 @@ pnpm add -D @tejika/test
   stdin). Buffered `screen()` with ANSI stripped, `waitFor*` polling,
   windowed reads (`mark`/`screenSince`/`screenAfterLast`), key helpers,
   `type()` at human speed, `Disposable`. Subclass it for app-specific flows.
-- `runCLI` — run a non-interactive command to completion; never rejects
-  (spawn failures land in the result).
+- `runCLI` — run a non-interactive command to completion. Spawn failures land
+  in the result; with `timeoutMs` the child is killed with `SIGKILL` and the
+  promise rejects with a `CLITimeoutError` carrying the output so far.
+- `spawnCLI` — like `runCLI`, but returns `{ child, stdout(), stderr(), done }`
+  so a test can read output while the process runs (wait for a line, then send
+  input or a signal). Takes the same options, including `timeoutMs`.
 - `createTestProfile` — throwaway temp dir with `<APP>_<KEY>` env overrides
   (via `@tejika/env`), `AsyncDisposable` with an `onDispose` hook for daemon
-  teardown.
+  teardown. The dir lives under `baseDir`, default `/tmp` on darwin (so a
+  daemon unix socket stays under the `sun_path` limit) and `tmpdir()` elsewhere.
 - `waitForDaemonRunning` / `waitForDaemonStopped` — poll a pidfile via
   `@tejika/process`; running throws on timeout, stopped tolerates it.
-- `poll` — the shared truthy-poll primitive.
+- `poll` — the shared truthy-poll primitive. It also covers custom "wait until
+  the snapshot matches" loops: `await poll(async () => matches(await snapshot()))`
+  resolves the truthy value, or `undefined` on timeout.
 - `assertBuilt` / `rebuild` — vitest globalSetup helpers for tests that spawn
   built binaries.
 

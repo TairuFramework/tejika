@@ -244,6 +244,12 @@ importers:
       '@tejika/env':
         specifier: workspace:^
         version: link:../env
+      '@tejika/log':
+        specifier: workspace:^
+        version: link:../log
+      '@tejika/process':
+        specifier: workspace:^
+        version: link:../process
       commander:
         specifier: 'catalog:'
         version: 15.0.0

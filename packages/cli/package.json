@@ -42,6 +42,8 @@
   },
   "dependencies": {
     "@tejika/env": "workspace:^",
+    "@tejika/log": "workspace:^",
+    "@tejika/process": "workspace:^",
     "commander": "catalog:"
   },
   "devDependencies": {

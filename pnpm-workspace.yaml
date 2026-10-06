@@ -31,6 +31,7 @@ catalogMode: manual
 
 minimumReleaseAgeExclude:
   - '@enkaku/*'
+  - '@hozon/*'
   - '@kigu/*'
   - '@kokuin/*'
   - '@sozai/*'

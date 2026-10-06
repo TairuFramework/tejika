@@ -248,8 +248,8 @@ importers:
   .:
     devDependencies:
       '@kigu/dev':
-        specifier: ^0.3.1
-        version: 0.3.1(@opentelemetry/api@1.9.1)(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(tsx@4.23.15))
+        specifier: ^0.3.2
+        version: 0.3.2(@opentelemetry/api@1.9.1)(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(tsx@4.23.15))
 
   packages/cli:
     dependencies:
@@ -717,8 +717,8 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@kigu/dev@0.3.1':
-    resolution: {integrity: sha512-hwloSBA7gqo9PdI70PKvQ6QFGJDNEviz8A4SHKxRfkADfhJTaEZ4ZUMUgmDvXELPNbmgq/auznJsOSgrBQnLOw==}
+  '@kigu/dev@0.3.2':
+    resolution: {integrity: sha512-imzXo4LX6knZtpV3WAgaMbZG631+vEtgFATfkntmYIa3aXG6LbKGq4pTlrb5czDL2xj6OwDbS78yYfZE5Wix4g==}
     hasBin: true
 
   '@kokuin/capability@0.3.1':
@@ -2583,7 +2583,7 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@kigu/dev@0.3.1(@opentelemetry/api@1.9.1)(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(tsx@4.23.15))':
+  '@kigu/dev@0.3.2(@opentelemetry/api@1.9.1)(vite@8.3.2(@types/node@26.6.4)(esbuild@0.28.2)(tsx@4.23.15))':
     dependencies:
       '@biomejs/biome': 2.5.15
       '@swc/cli': 0.8.1(@swc/core@1.16.13)

@@ -6,6 +6,10 @@
   dir: packages/cli
   intents:
     - cli-command-helpers-daemon-command
+"@tejika/db@0.1.0":
+  dir: packages/db
+  intents:
+    - db-initial
 "@tejika/env@0.5.0":
   dir: packages/env
   intents:
@@ -14,6 +18,10 @@
   dir: packages/env
   intents:
     - env-config-file-helpers
+"@tejika/env@0.5.3":
+  dir: packages/env
+  intents:
+    - env-database-path
 "@tejika/log@0.4.1":
   dir: packages/log
   intents:

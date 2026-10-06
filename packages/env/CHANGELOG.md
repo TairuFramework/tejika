@@ -1,5 +1,11 @@
 # @tejika/env
 
+## 0.5.3
+
+### Patch Changes
+
+- Add `getDatabasePath` for resolving an app's local database file.
+
 ## 0.5.2
 
 ### Patch Changes

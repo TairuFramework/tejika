@@ -12,6 +12,7 @@ pnpm add @tejika/env
   pidfile and boot-lock path. `getSocketPath` returns a `.sock` path on POSIX
   and a `\\.\pipe\…` named pipe on win32.
 - `getDataDir` / `getStateDir` / `getLogDir` — per-app XDG-style directories.
+- `getDatabasePath` — a named `.db` file in the data dir, or the `<APP>_DATABASE_PATH` override.
 - `getPort` / `resolvePort` / `parsePort` — resolve a port for an app, honouring
   the `<APP>_PORT` override.
 - `appEnvVar` / `getAppEnvVar` — build and read an `<APP>_<KEY>` variable name.

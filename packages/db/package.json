@@ -1,0 +1,58 @@
+{
+  "name": "@tejika/db",
+  "version": "0.1.0",
+  "description": "Open local hozon databases for CLI tools and daemons",
+  "keywords": [
+    "database",
+    "sqlite",
+    "hozon",
+    "local"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TairuFramework/tejika.git",
+    "directory": "packages/db"
+  },
+  "license": "MIT",
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    }
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "lib/*",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "pnpm run build:clean && pnpm run build:js && pnpm run build:types",
+    "build:clean": "del-cli lib",
+    "build:js": "del-cli \"lib/**/*.js\" && swc src -d ./lib --config-file ../../node_modules/@kigu/dev/swc.json --strip-leading-paths",
+    "build:types": "del-cli \"lib/**/*.d.ts\" \"lib/**/*.d.ts.map\" && tsc --emitDeclarationOnly --skipLibCheck",
+    "build:types:ci": "tsc --emitDeclarationOnly --skipLibCheck --declarationMap false",
+    "prepack": "pnpm run build:clean && pnpm run build:js && pnpm run build:types:ci",
+    "test": "pnpm run test:types && pnpm run test:unit",
+    "test:types": "tsc --noEmit --skipLibCheck -p tsconfig.test.json",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@hozon/db": "catalog:",
+    "@hozon/node-sqlite": "catalog:",
+    "@tejika/env": "workspace:^"
+  },
+  "devDependencies": {
+    "@hozon/store-log": "catalog:",
+    "@hozon/store-telemetry": "catalog:",
+    "@types/node": "catalog:"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -182,6 +182,18 @@ catalogs:
     '@hono/node-server':
       specifier: ^2.1.3
       version: 2.1.3
+    '@hozon/db':
+      specifier: ^0.1.0
+      version: 0.1.0
+    '@hozon/node-sqlite':
+      specifier: ^0.1.0
+      version: 0.1.0
+    '@hozon/store-log':
+      specifier: ^0.1.0
+      version: 0.1.0
+    '@hozon/store-telemetry':
+      specifier: ^0.1.0
+      version: 0.1.0
     '@inkjs/ui':
       specifier: ^2.0.0
       version: 2.0.0
@@ -272,6 +284,28 @@ importers:
       strip-ansi:
         specifier: 'catalog:'
         version: 7.2.0
+
+  packages/db:
+    dependencies:
+      '@hozon/db':
+        specifier: 'catalog:'
+        version: 0.1.0(@logtape/logtape@2.3.11)
+      '@hozon/node-sqlite':
+        specifier: 'catalog:'
+        version: 0.1.0
+      '@tejika/env':
+        specifier: workspace:^
+        version: link:../env
+    devDependencies:
+      '@hozon/store-log':
+        specifier: 'catalog:'
+        version: 0.1.0(@logtape/logtape@2.3.11)
+      '@hozon/store-telemetry':
+        specifier: 'catalog:'
+        version: 0.1.0(@logtape/logtape@2.3.11)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.4
 
   packages/env:
     dependencies:
@@ -645,6 +679,24 @@ packages:
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4
+
+  '@hozon/adapter@0.1.0':
+    resolution: {integrity: sha512-OfwOdQneFmsCpxtbeQxI11VLWR1+hSHH8klq4QxYLqMTtK/SJpVyGqyTDqRPhRzpTeVtYaY8xw31K9m1drjciA==}
+    engines: {node: '>=24'}
+
+  '@hozon/db@0.1.0':
+    resolution: {integrity: sha512-2gzPqDIc7/E8ARti3GkcUXU5RJ0wa8wcdaiTHBnZqOwiuawdVmFtdJ+K2w6RkhBO3KMcX/1o0AADwHBkkHgzsw==}
+    engines: {node: '>=24'}
+
+  '@hozon/node-sqlite@0.1.0':
+    resolution: {integrity: sha512-yUOEHgxSXI6QlpjJNOYa3R+Ytp3dS7VB50oISVnUHvX0rWqVEBa1XNfN90cYjrAyeGLTKO3zFLQhqdhv7Qz5Xw==}
+    engines: {node: '>=24'}
+
+  '@hozon/store-log@0.1.0':
+    resolution: {integrity: sha512-I89h97gdplO6uhOXu3FGs452HTZikQ+8zF+ACtHdCpxTbvfXJIuZXJ4oXsAhlw6dvmEvxtryxvRqIVvy++CBhQ==}
+
+  '@hozon/store-telemetry@0.1.0':
+    resolution: {integrity: sha512-95SKzzmt+t9pwKukCvvwBZUAzZTBAPICe4Uxy5ap9G28YiMZyUj/ZJOWa9Qk3hnbVXZNQI/aDEFCWON0fibibg==}
 
   '@inkjs/ui@2.0.0':
     resolution: {integrity: sha512-5+8fJmwtF9UvikzLfph9sA+LS+l37Ij/szQltkuXLOAXwNkBX9innfzh4pLGXIB59vKEQUtc6D4qGvhD7h3pAg==}
@@ -1670,6 +1722,10 @@ packages:
     resolution: {integrity: sha512-dcS1ul+9tmeD95T+x28/ehLgd9mENa3LsvDTtzm3vyBEO7RPptvAD+t44WVXaUjTBRcrpFeFlC8WCruUR456hw==}
     engines: {node: '>=0.10.0'}
 
+  kysely@0.29.6:
+    resolution: {integrity: sha512-hHaB8C/rfzDDtr/t8YZwxAuPJTT0zHyaPoVzcXwDYhYNAgH/4sIfVhi/XLLIY+bL/FqaIJnjATDbi8ObSELmxg==}
+    engines: {node: '>=22.0.0'}
+
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
     engines: {node: '>= 12.0.0'}
@@ -2472,6 +2528,41 @@ snapshots:
   '@hono/node-server@2.1.3(hono@4.13.13)':
     dependencies:
       hono: 4.13.13
+
+  '@hozon/adapter@0.1.0':
+    dependencies:
+      kysely: 0.29.6
+
+  '@hozon/db@0.1.0(@logtape/logtape@2.3.11)':
+    dependencies:
+      '@hozon/adapter': 0.1.0
+      '@sozai/log': 0.4.0(@logtape/logtape@2.3.11)
+      kysely: 0.29.6
+    transitivePeerDependencies:
+      - '@logtape/logtape'
+
+  '@hozon/node-sqlite@0.1.0':
+    dependencies:
+      '@hozon/adapter': 0.1.0
+      kysely: 0.29.6
+
+  '@hozon/store-log@0.1.0(@logtape/logtape@2.3.11)':
+    dependencies:
+      '@hozon/adapter': 0.1.0
+      '@hozon/db': 0.1.0(@logtape/logtape@2.3.11)
+      '@sozai/json': 0.3.0
+      kysely: 0.29.6
+    transitivePeerDependencies:
+      - '@logtape/logtape'
+
+  '@hozon/store-telemetry@0.1.0(@logtape/logtape@2.3.11)':
+    dependencies:
+      '@hozon/adapter': 0.1.0
+      '@hozon/db': 0.1.0(@logtape/logtape@2.3.11)
+      '@sozai/json': 0.3.0
+      kysely: 0.29.6
+    transitivePeerDependencies:
+      - '@logtape/logtape'
 
   '@inkjs/ui@2.0.0(ink@7.1.1(@types/react@19.3.0)(react@19.3.0))':
     dependencies:
@@ -3457,6 +3548,8 @@ snapshots:
       '@keyv/serialize': 1.1.1
 
   kind-of@6.0.3: {}
+
+  kysely@0.29.6: {}
 
   lightningcss-android-arm64@1.33.0:
     optional: true

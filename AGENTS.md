@@ -13,6 +13,7 @@ apps that consume it.
 packages/
 +-- env/        # Local paths, ports, and env-var overrides (getSocketPath, getPort, ...)
 +-- log/        # Local log files: rotating file sinks and logtape config (createFileSink, ...; host supplies @logtape/logtape)
++-- db/         # Local hozon databases (openLocalDatabase; Node only)
 +-- process/    # Local daemon spawn / lifecycle / Enkaku client reconnect
 +-- server/     # Local Hono HTTP server: loopback-private (default) or network mode
 +-- cli/        # commander + Ink plumbing (buildProgram, runInk, option builders)

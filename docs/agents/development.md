@@ -6,7 +6,7 @@ workflow and the `docs/agents/plans/` lifecycle.
 
 ## Repo-specific
 
-Local-side foundation (env, log, process, server, cli, ui, test). Consumes
+Local-side foundation (env, log, db, process, server, cli, ui, test). Consumes
 `@enkaku` 0.21 (client, protocol, server, socket, http-serve).
 
 ### Tooling binary contract

@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import {
+  getDatabasePath,
   getDataDir,
   getLockPath,
   getLogDir,
@@ -14,10 +15,43 @@ import {
 
 afterEach(() => {
   delete process.env.MYAPP_DATA_DIR
+  delete process.env.MYAPP_DATABASE_PATH
   delete process.env.MYAPP_STATE_DIR
   delete process.env.MYAPP_LOG_DIR
   delete process.env.MYAPP_SOCKET_PATH
   delete process.env.MYAPP_PID_PATH
+})
+
+describe('getDatabasePath', () => {
+  test('defaults to <app>.db in the data dir', () => {
+    process.env.MYAPP_DATA_DIR = '/tmp/data'
+    expect(getDatabasePath('myapp')).toBe(join('/tmp/data', 'myapp.db'))
+  })
+  test('uses name for the file', () => {
+    process.env.MYAPP_DATA_DIR = '/tmp/data'
+    expect(getDatabasePath('myapp', 'flow')).toBe(join('/tmp/data', 'flow.db'))
+  })
+  test('<APP>_DATABASE_PATH overrides, with or without name', () => {
+    process.env.MYAPP_DATABASE_PATH = '/elsewhere/custom.db'
+    expect(getDatabasePath('myapp')).toBe('/elsewhere/custom.db')
+    expect(getDatabasePath('myapp', 'flow')).toBe('/elsewhere/custom.db')
+  })
+  test('an empty override is treated as unset', () => {
+    process.env.MYAPP_DATA_DIR = '/tmp/data'
+    process.env.MYAPP_DATABASE_PATH = '  '
+    expect(getDatabasePath('myapp')).toBe(join('/tmp/data', 'myapp.db'))
+  })
+  test('rejects a name with a path separator', () => {
+    expect(() => getDatabasePath('myapp', '../evil')).toThrow(/path separator/)
+    expect(() => getDatabasePath('myapp', 'a\\b')).toThrow(/path separator/)
+  })
+  test('rejects a standalone ..', () => {
+    expect(() => getDatabasePath('myapp', '..')).toThrow(/path separator/)
+  })
+  test('validates name before resolving <APP>_DATABASE_PATH', () => {
+    process.env.MYAPP_DATABASE_PATH = '/elsewhere/custom.db'
+    expect(() => getDatabasePath('myapp', '../evil')).toThrow(/path separator/)
+  })
 })
 
 const realPlatform = process.platform

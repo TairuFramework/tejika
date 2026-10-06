@@ -52,6 +52,12 @@ export function getLogDir(app: string): string {
   return getAppEnvVar(app, 'LOG_DIR') ?? envPaths(app, { suffix: '' }).log
 }
 
+/** Database file: `<name>.db` in the data dir, unless `<APP>_DATABASE_PATH` is set. */
+export function getDatabasePath(app: string, name: string = app): string {
+  assertNoSeparator(name, 'name')
+  return getAppEnvVar(app, 'DATABASE_PATH') ?? join(getDataDir(app), `${name}.db`)
+}
+
 /**
  * A win32 named pipe for `base`, scoped by a short stable hash of `anchor` (the POSIX-style
  * `.sock` path the same call resolves on POSIX). Named pipes live in one machine-global

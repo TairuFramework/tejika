@@ -1,18 +1,17 @@
 {
-  "name": "@tejika/env",
-  "version": "0.5.3",
-  "description": "Local paths, ports and env-var overrides for CLI tools and daemons",
+  "name": "@tejika/db",
+  "version": "0.1.0",
+  "description": "Open local hozon databases for CLI tools and daemons",
   "keywords": [
-    "env",
-    "paths",
-    "ports",
-    "socket",
+    "database",
+    "sqlite",
+    "hozon",
     "local"
   ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TairuFramework/tejika.git",
-    "directory": "packages/env"
+    "directory": "packages/db"
   },
   "license": "MIT",
   "sideEffects": false,
@@ -41,10 +40,13 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
-    "env-paths": "catalog:",
-    "get-port": "catalog:"
+    "@hozon/db": "catalog:",
+    "@hozon/node-sqlite": "catalog:",
+    "@tejika/env": "workspace:^"
   },
   "devDependencies": {
+    "@hozon/store-log": "catalog:",
+    "@hozon/store-telemetry": "catalog:",
     "@types/node": "catalog:"
   },
   "engines": {

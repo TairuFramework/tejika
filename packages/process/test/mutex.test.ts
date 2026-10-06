@@ -134,7 +134,16 @@ test('an abandoned booting record is taken immediately, with no grace period', a
 // `killTimeoutMs` expires and it SIGKILLs a daemon whose `onShutdown` never ran: the
 // elapsed-time assertion is what catches that.
 test('a stop and a boot never interleave', { timeout: 30_000 }, async () => {
-  await spawnDaemon({ app: APP, entry: daemonEntry, socketPath, pidPath, logPath, env: childEnv })
+  // A tsx child's cold start alone can eat most of the default 3 s boot budget on Linux CI.
+  await spawnDaemon({
+    app: APP,
+    entry: daemonEntry,
+    socketPath,
+    pidPath,
+    logPath,
+    env: childEnv,
+    timeoutMs: 20_000,
+  })
   const childPID = readDaemonState(pidPath)?.pid as number
   expect(childPID).toBeGreaterThan(0)
   expect(childPID).not.toBe(process.pid)

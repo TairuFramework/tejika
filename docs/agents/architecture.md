@@ -10,7 +10,7 @@ apps that compose these packages.
 
 - **`@tejika/env`** — deterministic local paths, ports, and env-var overrides
   (`getDataDir`, `getStateDir`, `getLogDir`, `getSocketPath`, `getPIDPath`,
-  `getLockPath`, `getPort`, `parsePort`, `resolvePort`, plus the `appEnvVar` /
+  `getLockPath`, `getDatabasePath`, `getPort`, `parsePort`, `resolvePort`, plus the `appEnvVar` /
   `getAppEnvVar` override helpers). The foundational concern with no `@tejika` deps.
   `@tejika/env` sockets are POSIX unix-domain `.sock` files (guarded against the
   `sun_path` limit — 104/108 bytes including the NUL, so 103/107 usable) and Windows
@@ -25,6 +25,10 @@ apps that compose these packages.
   calls logtape's `setup()`/`configureSync()` itself; the host passes the result to
   `@sozai/log`'s (or its own) `setup()`. `@logtape/logtape` is a peer dependency, not
   a regular one, so the host controls the single logtape instance its process runs.
+- **`@tejika/db`** — `openLocalDatabase` opens an app's local SQLite database through
+  hozon (`@hozon/db` + `@hozon/node-sqlite`): resolves the path via `getDatabasePath`,
+  creates the parent directory, registers the stores and migrates eagerly, closing
+  the handle on failure. Node only (`node:sqlite`).
 - **`@tejika/process`** — local daemon lifecycle: detached spawn, foreground
   bootstrap, pidfile/split-brain guard (daemon locking via `@sozai/lock`), and
   Enkaku client management with reconnect backoff.
@@ -44,6 +48,7 @@ apps that compose these packages.
 ```
 @tejika/env       no @tejika deps; env-paths + get-port (foundational)
 @tejika/log       env + @logtape/file (@logtape/logtape peer, no @sozai/log)
+@tejika/db        env + @hozon/db + @hozon/node-sqlite (Node only)
 @tejika/process   env + @enkaku/{socket,client,protocol,server} + @sozai/lock + nano-spawn
 @tejika/server    env + @enkaku/{http-serve,protocol} + hono + @hono/node-server
 @tejika/cli       commander, ink, react; env (default option values)
@@ -60,7 +65,7 @@ devDependency.
 
 Tejika depends on `@enkaku/*` directly rather than re-exporting or wrapping it. The
 version floor lives in the workspace catalog (`pnpm-workspace.yaml`) — currently
-`@enkaku/* ^0.21`, `@sozai/* ^0.1` — and every package references it as `catalog:`. The local-process and HTTP-server packages use Enkaku transports and
+`@enkaku/* ^0.21`, `@sozai/* ^0.1`, `@hozon/* ^0.1` — and every package references it as `catalog:`. The local-process and HTTP-server packages use Enkaku transports and
 client/server as-is. Bugs in `@enkaku/*` are fixed at the Enkaku source repo, never
 worked around here.
 

@@ -45,6 +45,13 @@ describe('getDatabasePath', () => {
     expect(() => getDatabasePath('myapp', '../evil')).toThrow(/path separator/)
     expect(() => getDatabasePath('myapp', 'a\\b')).toThrow(/path separator/)
   })
+  test('rejects a standalone ..', () => {
+    expect(() => getDatabasePath('myapp', '..')).toThrow(/path separator/)
+  })
+  test('validates name before resolving <APP>_DATABASE_PATH', () => {
+    process.env.MYAPP_DATABASE_PATH = '/elsewhere/custom.db'
+    expect(() => getDatabasePath('myapp', '../evil')).toThrow(/path separator/)
+  })
 })
 
 const realPlatform = process.platform

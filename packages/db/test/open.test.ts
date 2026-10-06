@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { type HozonDB, SchemaVersionError } from '@hozon/db'
+import { type HozonDB, InvalidTablePrefixError, SchemaVersionError } from '@hozon/db'
 import { NodeSQLiteAdapter } from '@hozon/node-sqlite'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -129,6 +129,26 @@ describe('openLocalDatabase', () => {
       await expect(
         openLocalDatabase({ app: 'tejika-test', path: file, stores: [failing] }),
       ).rejects.toThrow('boom')
+      expect(close).toHaveBeenCalled()
+    } finally {
+      close.mockRestore()
+    }
+    rmSync(file)
+    await open({ app: 'tejika-test', path: file, stores: [notes(['001'])] })
+  })
+
+  test('closes the adapter when HozonDB construction fails', async () => {
+    const file = join(dataDir, 'prefix-fail.db')
+    const close = vi.spyOn(NodeSQLiteAdapter.prototype, 'close')
+    try {
+      await expect(
+        openLocalDatabase({
+          app: 'tejika-test',
+          path: file,
+          tablePrefix: 'Bad-Prefix',
+          stores: [notes(['001'])],
+        }),
+      ).rejects.toThrow(InvalidTablePrefixError)
       expect(close).toHaveBeenCalled()
     } finally {
       close.mockRestore()

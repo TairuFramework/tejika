@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type HozonDB, SchemaVersionError } from '@hozon/db'
 import { NodeSQLiteAdapter } from '@hozon/node-sqlite'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { type OpenLocalDatabaseParams, openLocalDatabase } from '../src/index.js'
 
@@ -30,7 +30,7 @@ function notes(migrations: Array<string>): Store {
   }
 }
 
-function listTables(file: string): Array<string> {
+async function listTables(file: string): Promise<Array<string>> {
   const adapter = new NodeSQLiteAdapter({ database: file })
   try {
     const rows = adapter.database
@@ -38,7 +38,7 @@ function listTables(file: string): Array<string> {
       .all() as Array<{ name: string }>
     return rows.map((row) => row.name)
   } finally {
-    void adapter.close()
+    await adapter.close()
   }
 }
 
@@ -70,7 +70,7 @@ describe('openLocalDatabase', () => {
     const file = join(dataDir, 'flow.db')
     expect(existsSync(file)).toBe(true)
     await db.close()
-    const tables = listTables(file)
+    const tables = await listTables(file)
     expect(tables).toContain('notes_001')
     expect(tables).toContain('hozon_notes_migration')
   })
@@ -105,7 +105,7 @@ describe('openLocalDatabase', () => {
       stores: [notes(['001'])],
     })
     await db.close()
-    const tables = listTables(file)
+    const tables = await listTables(file)
     expect(tables).toContain('tj_notes_migration')
     expect(tables).not.toContain('hozon_notes_migration')
   })
@@ -123,9 +123,16 @@ describe('openLocalDatabase', () => {
       },
       createAPI: () => ({}),
     }
-    await expect(
-      openLocalDatabase({ app: 'tejika-test', path: file, stores: [failing] }),
-    ).rejects.toThrow('boom')
+    // rmSync alone cannot prove release on POSIX, so also assert the adapter closes.
+    const close = vi.spyOn(NodeSQLiteAdapter.prototype, 'close')
+    try {
+      await expect(
+        openLocalDatabase({ app: 'tejika-test', path: file, stores: [failing] }),
+      ).rejects.toThrow('boom')
+      expect(close).toHaveBeenCalled()
+    } finally {
+      close.mockRestore()
+    }
     rmSync(file)
     await open({ app: 'tejika-test', path: file, stores: [notes(['001'])] })
   })

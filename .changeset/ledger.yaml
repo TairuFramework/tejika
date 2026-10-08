@@ -10,6 +10,10 @@
   dir: packages/db
   intents:
     - db-initial
+"@tejika/db@0.2.0":
+  dir: packages/db
+  intents:
+    - great-camels-design
 "@tejika/env@0.5.0":
   dir: packages/env
   intents:
@@ -26,14 +30,26 @@
   dir: packages/log
   intents:
     - cli-command-helpers-daemon-command
+"@tejika/log@0.4.2":
+  dir: packages/log
+  intents:
+    - wicked-cows-collect
 "@tejika/process@0.5.0":
   dir: packages/process
   intents:
     - early-zebras-lay
+"@tejika/process@0.5.3":
+  dir: packages/process
+  intents:
+    - wicked-cows-collect
 "@tejika/server@0.4.1":
   dir: packages/server
   intents:
     - lazy-seals-juggle
+"@tejika/server@0.4.2":
+  dir: packages/server
+  intents:
+    - wicked-cows-collect
 "@tejika/test@0.4.1":
   dir: packages/test
   intents:

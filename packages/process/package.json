@@ -1,6 +1,6 @@
 {
   "name": "@tejika/process",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Local daemon spawn, lifecycle and Enkaku client reconnection",
   "keywords": [
     "process",

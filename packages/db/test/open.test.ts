@@ -71,7 +71,7 @@ describe('openLocalDatabase', () => {
     expect(existsSync(file)).toBe(true)
     await db.close()
     const tables = await listTables(file)
-    expect(tables).toContain('notes_001')
+    expect(tables).toContain('hozon_notes_001')
     expect(tables).toContain('hozon_notes_migration')
   })
 
@@ -107,6 +107,8 @@ describe('openLocalDatabase', () => {
     await db.close()
     const tables = await listTables(file)
     expect(tables).toContain('tj_notes_migration')
+    expect(tables).toContain('tj_notes_001')
+    expect(tables).not.toContain('hozon_notes_001')
     expect(tables).not.toContain('hozon_notes_migration')
   })
 

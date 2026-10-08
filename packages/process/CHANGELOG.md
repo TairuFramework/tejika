@@ -1,5 +1,11 @@
 # @tejika/process
 
+## 0.5.3
+
+### Patch Changes
+
+- Update @logtape and @enkaku dependencies
+
 ## 0.5.0
 
 ### Minor Changes

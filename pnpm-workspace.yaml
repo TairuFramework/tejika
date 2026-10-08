@@ -5,19 +5,19 @@ nodeLinker: hoisted
 
 catalog:
   '@enkaku/client': ^0.21.3
-  '@enkaku/http-serve': ^0.21.3
+  '@enkaku/http-serve': ^0.21.4
   '@enkaku/protocol': ^0.21.4
-  '@enkaku/server': ^0.21.3
+  '@enkaku/server': ^0.21.4
   '@enkaku/socket': ^0.21.3
   '@hono/node-server': ^2.1.3
-  '@hozon/db': ^0.1.0
+  '@hozon/db': ^0.2.2
   '@hozon/node-sqlite': ^0.1.0
-  '@hozon/store-log': ^0.1.0
-  '@hozon/store-telemetry': ^0.1.0
+  '@hozon/store-log': ^0.2.1
+  '@hozon/store-telemetry': ^0.2.1
   '@inkjs/ui': ^2.0.0
   '@types/react': ^19.2.18
-  '@logtape/file': ^2.3.11
-  '@logtape/logtape': ^2.3.11
+  '@logtape/file': ^2.4.0
+  '@logtape/logtape': ^2.4.0
   '@sozai/lock': ^0.1.2
   '@types/node': ^26.6.4
   commander: ^15.0.0

@@ -1,6 +1,6 @@
 {
   "name": "@tejika/cli",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "commander + Ink plumbing for building local CLI tools",
   "keywords": [
     "cli",
@@ -55,8 +55,8 @@
     "strip-ansi": "catalog:"
   },
   "peerDependencies": {
-    "ink": "^7.0.0",
-    "react": "^19.0.0"
+    "ink": "^8.0.0",
+    "react": "^19.3.0"
   },
   "engines": {
     "node": ">=24"

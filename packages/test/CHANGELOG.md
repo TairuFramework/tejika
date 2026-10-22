@@ -1,5 +1,16 @@
 # @tejika/test
 
+## 0.5.0
+
+### Minor Changes
+
+- Update @enkaku dependencies to 0.22 (OpenTelemetry v3)
+
+### Patch Changes
+
+- Updated dependencies:
+  - @tejika/process@0.6.0
+
 ## 0.4.2
 
 ### Patch Changes

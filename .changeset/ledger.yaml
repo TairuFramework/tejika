@@ -6,6 +6,10 @@
   dir: packages/cli
   intents:
     - cli-command-helpers-daemon-command
+"@tejika/cli@0.6.0":
+  dir: packages/cli
+  intents:
+    - curvy-kings-count
 "@tejika/db@0.1.0":
   dir: packages/db
   intents:
@@ -42,6 +46,10 @@
   dir: packages/process
   intents:
     - wicked-cows-collect
+"@tejika/process@0.6.0":
+  dir: packages/process
+  intents:
+    - curvy-kings-count
 "@tejika/server@0.4.1":
   dir: packages/server
   intents:
@@ -50,6 +58,10 @@
   dir: packages/server
   intents:
     - wicked-cows-collect
+"@tejika/server@0.5.0":
+  dir: packages/server
+  intents:
+    - curvy-kings-count
 "@tejika/test@0.4.1":
   dir: packages/test
   intents:
@@ -58,6 +70,10 @@
   dir: packages/test
   intents:
     - test-spawn-cli-base-dir
+"@tejika/test@0.5.0":
+  dir: packages/test
+  intents:
+    - curvy-kings-count
 "@tejika/ui@0.4.1":
   dir: packages/ui
   intents:

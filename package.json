@@ -19,7 +19,7 @@
     "test:types": "turbo run test:types"
   },
   "devDependencies": {
-    "@kigu/dev": "^0.3.2"
+    "@kigu/dev": "^0.3.4"
   },
-  "packageManager": "pnpm@12.14.0"
+  "packageManager": "pnpm@12.15.0"
 }

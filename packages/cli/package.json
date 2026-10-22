@@ -1,6 +1,6 @@
 {
   "name": "@tejika/cli",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "commander + Ink plumbing for building local CLI tools",
   "keywords": [
     "cli",

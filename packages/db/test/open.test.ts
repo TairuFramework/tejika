@@ -1,7 +1,12 @@
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { type HozonDB, InvalidTablePrefixError, SchemaVersionError } from '@hozon/db'
+import {
+  type HozonDB,
+  InvalidTablePrefixError,
+  SchemaVersionError,
+  StoreAlreadyRegisteredError,
+} from '@hozon/db'
 import { NodeSQLiteAdapter } from '@hozon/node-sqlite'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -166,5 +171,13 @@ describe('openLocalDatabase', () => {
     await expect(
       openLocalDatabase({ app: 'tejika-test', path: file, stores: [notes(['001'])] }),
     ).rejects.toThrow(SchemaVersionError)
+  })
+
+  test('surfaces StoreAlreadyRegisteredError for different definitions with the same name', async () => {
+    const first = notes(['001'])
+    const second = { ...first }
+    await expect(
+      openLocalDatabase({ app: 'tejika-test', path: ':memory:', stores: [first, second] }),
+    ).rejects.toThrow(StoreAlreadyRegisteredError)
   })
 })

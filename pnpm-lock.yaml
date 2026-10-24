@@ -183,17 +183,17 @@ catalogs:
       specifier: ^2.1.5
       version: 2.1.5
     '@hozon/db':
-      specifier: ^0.3.0
-      version: 0.3.0
+      specifier: ^0.5.0
+      version: 0.5.0
     '@hozon/node-sqlite':
-      specifier: ^0.1.0
-      version: 0.1.0
+      specifier: ^0.2.0
+      version: 0.2.0
     '@hozon/store-log':
-      specifier: ^0.2.4
-      version: 0.2.4
+      specifier: ^0.4.0
+      version: 0.4.0
     '@hozon/store-telemetry':
-      specifier: ^0.2.3
-      version: 0.2.3
+      specifier: ^0.4.0
+      version: 0.4.0
     '@inkjs/ui':
       specifier: ^2.0.0
       version: 2.0.0
@@ -289,20 +289,20 @@ importers:
     dependencies:
       '@hozon/db':
         specifier: 'catalog:'
-        version: 0.3.0(@logtape/logtape@2.4.2)
+        version: 0.5.0(@logtape/logtape@2.4.2)
       '@hozon/node-sqlite':
         specifier: 'catalog:'
-        version: 0.1.0
+        version: 0.2.0
       '@tejika/env':
         specifier: workspace:^
         version: link:../env
     devDependencies:
       '@hozon/store-log':
         specifier: 'catalog:'
-        version: 0.2.4(@logtape/logtape@2.4.2)
+        version: 0.4.0(@logtape/logtape@2.4.2)
       '@hozon/store-telemetry':
         specifier: 'catalog:'
-        version: 0.2.3(@logtape/logtape@2.4.2)
+        version: 0.4.0(@logtape/logtape@2.4.2)
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.5
@@ -692,23 +692,23 @@ packages:
     peerDependencies:
       hono: ^4 || ^5.0.0-0
 
-  '@hozon/adapter@0.1.0':
-    resolution: {integrity: sha512-OfwOdQneFmsCpxtbeQxI11VLWR1+hSHH8klq4QxYLqMTtK/SJpVyGqyTDqRPhRzpTeVtYaY8xw31K9m1drjciA==}
+  '@hozon/adapter@0.2.1':
+    resolution: {integrity: sha512-OGeMABBQnI52dLIPRq2vCHJB7PEssoIUMuyHjDcMItpwnQJwYER5wXx7vlVawozUhud8nLVyg3v4Lp3ULPn0Og==}
     engines: {node: '>=24'}
 
-  '@hozon/db@0.3.0':
-    resolution: {integrity: sha512-F8BgMKKqenpv8X7YK6zbJoUeAztotuQ1//D+jZ0mClM9vaorQB32mift+zhpj8IUx2OqRbJkNGs5KEzvsSCGsQ==}
+  '@hozon/db@0.5.0':
+    resolution: {integrity: sha512-5Iu2k6N96htRPXw8L8Dn4B7pI/VitupOsNGA4lMdmWXPuw27Zgne70wnKNLrsf6UhXx2x/RxE+oOP3JjpD+nlQ==}
     engines: {node: '>=24'}
 
-  '@hozon/node-sqlite@0.1.0':
-    resolution: {integrity: sha512-yUOEHgxSXI6QlpjJNOYa3R+Ytp3dS7VB50oISVnUHvX0rWqVEBa1XNfN90cYjrAyeGLTKO3zFLQhqdhv7Qz5Xw==}
+  '@hozon/node-sqlite@0.2.0':
+    resolution: {integrity: sha512-D6qlhV6B0+2UnSMKAAEcop7XoAjO9j10i4Uob5LAZ0po24ou34doXTCxbNsZHhKlLk6bPsAAu2OBJbPdbEd1GA==}
     engines: {node: '>=24'}
 
-  '@hozon/store-log@0.2.4':
-    resolution: {integrity: sha512-ek4DHaTdQOGVZQBR06L8fbM7zr42QMwqcRuidIAM+XKacqEM1vzKpMIxRq3sEMwLxxadBeXyPJI6c6ImImnL/Q==}
+  '@hozon/store-log@0.4.0':
+    resolution: {integrity: sha512-t0N/pQKdKclJb0hqGc6NFEHLfaEbWp985QdS/htie1PiEOOeJRt7Cdp4BFXTthLaaWS9VhYvDHzksTm0Y/vwDA==}
 
-  '@hozon/store-telemetry@0.2.3':
-    resolution: {integrity: sha512-pHG549bh5XwoftCQOXOsikESOzZJIrAODXCk/IO9v0G844Yj4qhojKa4qlaMrW3GqcNiTu+gQ7HGn5eivHiDHw==}
+  '@hozon/store-telemetry@0.4.0':
+    resolution: {integrity: sha512-bkmJnXoB9L2e6Vf+6nMJq/ZBLho+n0vvaob4TExwJYYsbhBCimAU4gbyVt06ReEkRm2y2GAXcEXXSqxMvUlwbQ==}
 
   '@inkjs/ui@2.0.0':
     resolution: {integrity: sha512-5+8fJmwtF9UvikzLfph9sA+LS+l37Ij/szQltkuXLOAXwNkBX9innfzh4pLGXIB59vKEQUtc6D4qGvhD7h3pAg==}
@@ -2506,37 +2506,37 @@ snapshots:
     dependencies:
       hono: 4.13.13
 
-  '@hozon/adapter@0.1.0':
+  '@hozon/adapter@0.2.1':
     dependencies:
       kysely: 0.29.7
 
-  '@hozon/db@0.3.0(@logtape/logtape@2.4.2)':
+  '@hozon/db@0.5.0(@logtape/logtape@2.4.2)':
     dependencies:
-      '@hozon/adapter': 0.1.0
+      '@hozon/adapter': 0.2.1
       '@sozai/async': 0.4.1
       '@sozai/log': 0.4.0(@logtape/logtape@2.4.2)
       kysely: 0.29.7
     transitivePeerDependencies:
       - '@logtape/logtape'
 
-  '@hozon/node-sqlite@0.1.0':
+  '@hozon/node-sqlite@0.2.0':
     dependencies:
-      '@hozon/adapter': 0.1.0
+      '@hozon/adapter': 0.2.1
       kysely: 0.29.7
 
-  '@hozon/store-log@0.2.4(@logtape/logtape@2.4.2)':
+  '@hozon/store-log@0.4.0(@logtape/logtape@2.4.2)':
     dependencies:
-      '@hozon/adapter': 0.1.0
-      '@hozon/db': 0.3.0(@logtape/logtape@2.4.2)
+      '@hozon/adapter': 0.2.1
+      '@hozon/db': 0.5.0(@logtape/logtape@2.4.2)
       '@sozai/codec': 0.4.3
       '@sozai/json': 0.3.0
     transitivePeerDependencies:
       - '@logtape/logtape'
 
-  '@hozon/store-telemetry@0.2.3(@logtape/logtape@2.4.2)':
+  '@hozon/store-telemetry@0.4.0(@logtape/logtape@2.4.2)':
     dependencies:
-      '@hozon/adapter': 0.1.0
-      '@hozon/db': 0.3.0(@logtape/logtape@2.4.2)
+      '@hozon/adapter': 0.2.1
+      '@hozon/db': 0.5.0(@logtape/logtape@2.4.2)
       '@sozai/json': 0.3.0
     transitivePeerDependencies:
       - '@logtape/logtape'

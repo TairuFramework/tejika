@@ -1,6 +1,6 @@
 {
   "name": "@tejika/db",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Open local hozon databases for CLI tools and daemons",
   "keywords": [
     "database",

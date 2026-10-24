@@ -18,6 +18,10 @@
   dir: packages/db
   intents:
     - great-camels-design
+"@tejika/db@0.4.0":
+  dir: packages/db
+  intents:
+    - hozon-db-05
 "@tejika/env@0.5.0":
   dir: packages/env
   intents:

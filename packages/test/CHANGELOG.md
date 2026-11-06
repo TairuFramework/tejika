@@ -1,5 +1,12 @@
 # @tejika/test
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies:
+  - @tejika/process@0.7.0
+
 ## 0.5.0
 
 ### Minor Changes

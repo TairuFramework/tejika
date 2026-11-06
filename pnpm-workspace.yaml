@@ -9,7 +9,7 @@ catalog:
   '@enkaku/protocol': ^0.23.0
   '@enkaku/server': ^0.23.0
   '@enkaku/socket': ^0.23.0
-  '@hono/node-server': ^2.1.5
+  '@hono/node-server': ^2.1.6
   '@hozon/db': ^0.5.1
   '@hozon/node-sqlite': ^0.3.0
   '@hozon/store-log': ^0.4.1
@@ -19,11 +19,11 @@ catalog:
   '@logtape/file': ^2.4.2
   '@logtape/logtape': ^2.4.2
   '@sozai/lock': ^0.1.2
-  '@types/node': ^26.6.5
+  '@types/node': ^26.6.6
   commander: ^15.0.0
   env-paths: ^4.0.0
   get-port: ^7.2.0
-  hono: ^4.13.13
+  hono: ^4.13.16
   ink: ^8.0.0
   ink-testing-library: ^4.0.0
   nano-spawn: ^2.1.0

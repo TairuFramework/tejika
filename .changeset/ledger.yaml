@@ -62,6 +62,10 @@
   dir: packages/process
   intents:
     - stack-enkaku-0-23
+"@tejika/process@0.7.1":
+  dir: packages/process
+  intents:
+    - process-child-handle
 "@tejika/server@0.4.1":
   dir: packages/server
   intents:

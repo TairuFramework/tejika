@@ -1,5 +1,11 @@
 # @tejika/process
 
+## 0.7.1
+
+### Patch Changes
+
+- Add `onSpawn` and `SpawnedDaemon` for retaining and terminating a spawned child, and `beforeBind` for admission checks under the boot mutex before claiming state or binding.
+
 ## 0.7.0
 
 ### Minor Changes

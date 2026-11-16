@@ -1,12 +1,16 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import spawn from 'nano-spawn'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 
+import { createDeadline } from '../src/deadline.js'
 import { DaemonBootError } from '../src/errors.js'
+import type { SpawnedDaemon } from '../src/index.js'
 import { spawnDaemon } from '../src/spawn.js'
+import { readDaemonState } from '../src/state.js'
 import { stopDaemon } from '../src/stop.js'
 
 const APP = 'tejika-test'
@@ -15,8 +19,28 @@ const crashEntry = fileURLToPath(new URL('./fixtures/crash-entry.ts', import.met
 const exitZeroEntry = fileURLToPath(new URL('./fixtures/exit-zero-entry.ts', import.meta.url))
 const crashExitRunner = fileURLToPath(new URL('./fixtures/spawn-crash-exit.ts', import.meta.url))
 
-// nano-spawn merges `env` over process.env, so the child gets tsx without this
-// process having to mutate its own NODE_OPTIONS.
+const neverBindEntry = fileURLToPath(new URL('./fixtures/never-bind-entry.ts', import.meta.url))
+const gatedEntry = fileURLToPath(new URL('./fixtures/gated-daemon-entry.ts', import.meta.url))
+const children: Array<SpawnedDaemon> = []
+
+async function expectGone(pid: number): Promise<void> {
+  await expect
+    .poll(
+      () => {
+        try {
+          process.kill(pid, 0)
+          return false
+        } catch (error) {
+          if (error instanceof Error && 'code' in error && error.code === 'ESRCH') return true
+          throw error
+        }
+      },
+      { timeout: 5000 },
+    )
+    .toBe(true)
+}
+
+// nano-spawn merges `env` over process.env without changing the parent's NODE_OPTIONS.
 const env = { NODE_OPTIONS: '--import tsx' }
 
 // `spawnDaemon` resolves the instant the socket accepts connections. The daemon
@@ -49,6 +73,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  for (const child of children.splice(0)) child.kill('SIGKILL')
   await stopDaemon({ app: APP, pidPath }).catch(() => {})
   rmSync(dir, { recursive: true, force: true })
 })
@@ -163,4 +188,78 @@ test('a boot crash does not pin the process for the rest of the budget', {
 
   expect(result.stdout).toContain('caught DaemonBootError')
   expect(elapsed).toBeLessThan(8000)
+})
+
+test('onSpawn receives the child once before readiness with the recorded PID', {
+  timeout: 30_000,
+}, async () => {
+  const spawned: Array<SpawnedDaemon> = []
+  await spawnDaemon({
+    app: APP,
+    entry: gatedEntry,
+    socketPath,
+    pidPath,
+    logPath,
+    env,
+    timeoutMs: 20_000,
+    onSpawn: (child) => {
+      children.push(child)
+      spawned.push(child)
+      expect(child.pid).toBeGreaterThan(0)
+      expect(readDaemonState(pidPath)).toBeNull()
+      expect(existsSync(socketPath)).toBe(false)
+      writeFileSync(`${pidPath}.admitted`, '')
+    },
+  })
+  expect(spawned).toHaveLength(1)
+  expect((await readReadyRecord(pidPath)).pid).toBe(spawned[0]?.pid)
+})
+
+test('onSpawn lets the caller terminate a child after the deadline expires', async () => {
+  let child: SpawnedDaemon | undefined
+  const error = await spawnDaemon({
+    app: APP,
+    entry: neverBindEntry,
+    socketPath,
+    pidPath,
+    logPath,
+    env,
+    deadline: createDeadline(500),
+    onSpawn: (spawned) => {
+      child = spawned
+      children.push(spawned)
+    },
+  }).catch((error: unknown) => error)
+  expect(error).toBeInstanceOf(Error)
+  expect((error as Error).message).toContain('Timed out waiting for socket')
+  if (child == null) throw new Error('onSpawn was not called')
+  const childPID = child.pid
+  expect(() => process.kill(childPID, 0)).not.toThrow()
+  expect(child.kill()).toBe(true)
+  await expectGone(child.pid)
+  expect(child.kill()).toBe(false)
+})
+
+test('onSpawn throwing terminates the child and preserves the error without unhandled rejection', async () => {
+  const refusal = new Error('starter stopped')
+  let child: SpawnedDaemon | undefined
+  const error = await spawnDaemon({
+    app: APP,
+    entry: neverBindEntry,
+    socketPath,
+    pidPath,
+    logPath,
+    env,
+    timeoutMs: 500,
+    onSpawn: (spawned) => {
+      child = spawned
+      children.push(spawned)
+      throw refusal
+    },
+  }).catch((error: unknown) => error)
+  expect(error).toBe(refusal)
+  if (child == null) throw new Error('onSpawn was not called')
+  await expectGone(child.pid)
+  // Let the exit promise settle; Vitest reports any unhandled rejection.
+  await delay(50)
 })

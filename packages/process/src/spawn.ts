@@ -9,6 +9,11 @@ import { waitForSocket } from './socket.js'
 import { readDaemonState } from './state.js'
 import { classifyState } from './status.js'
 
+export type SpawnedDaemon = {
+  pid: number
+  kill: (signal?: NodeJS.Signals) => boolean
+}
+
 export type SpawnDaemonOptions = {
   app: string
   /**
@@ -29,6 +34,8 @@ export type SpawnDaemonOptions = {
   timeoutMs?: number
   deadline?: Deadline
   signal?: AbortSignal
+  /** Called once with the child handle before waiting for readiness. Throwing terminates the child. */
+  onSpawn?: (child: SpawnedDaemon) => void
 }
 
 /** Never settles. Used to withdraw a boot-crash claim we decided not to make. */
@@ -107,16 +114,21 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<void> {
   )
 
   try {
-    // Dereference the child so it can outlive us.
-    const child = await subprocess.nodeChildProcess
-    child.unref()
-  } catch {
-    // The child never started at all — the executable could not be run. Throwing the
-    // raw errno from here would abandon `exited`, whose rejection nothing has
-    // handled yet: an unhandled rejection, which is fatal in Node. `exited` already
-    // carries this same failure as a `DaemonBootError`, so say nothing and let the
-    // race below surface it, with the log path attached, like every other boot
-    // failure.
+    // Spawn failures are surfaced by `exited`, with the log path attached.
+    const child = await subprocess.nodeChildProcess.catch(() => undefined)
+    if (child != null) {
+      child.unref()
+      if (child.pid != null) {
+        try {
+          opts.onSpawn?.({ pid: child.pid, kill: (signal = 'SIGTERM') => child.kill(signal) })
+        } catch (err) {
+          // No socket race will consume the rejection caused by terminating this child.
+          exited.catch(() => {})
+          child.kill('SIGTERM')
+          throw err
+        }
+      }
+    }
   } finally {
     // The child holds its own copy of the descriptor; release ours.
     closeSync(logFD)

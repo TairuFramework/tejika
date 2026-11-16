@@ -56,6 +56,22 @@ const handle = await runDaemon<MyProtocol>({
 await handle.close() // idempotent
 ```
 
+`beforeBind?: () => void | Promise<void>` rechecks admission under the boot mutex,
+after state classification and stale socket handling, before claiming state or
+binding. Throwing or rejecting preserves the error, releases the mutex and leaves
+no socket, state record or signal handlers from this boot. Keep it quick and never
+call `stopDaemon` or anything else that takes the same mutex from the hook.
+
+### `spawnDaemon`
+
+`onSpawn?: (child: SpawnedDaemon) => void` receives the child once it has a PID,
+before the readiness wait. It is never called if the child fails to start.
+`SpawnedDaemon` exposes `pid` and `kill(signal?: NodeJS.Signals): boolean`, which
+delegates to that Node child process and defaults to `SIGTERM`. Retain the handle
+to terminate a child after a deadline or abort. Throwing from `onSpawn` terminates
+the child with `SIGTERM` and rejects `spawnDaemon` with the original error.
+`spawnDaemon` still returns `Promise<void>`.
+
 ### `ensureDaemon`
 
 ```ts

@@ -37,6 +37,12 @@ export type RunDaemonOptions<Protocol extends ProtocolDefinition> = {
    * hold it for `killTimeoutMs` plus the SIGKILL grace, and waiting that out is correct.
    */
   lockTimeoutMs?: number
+  /**
+   * Admission check under the boot mutex, before claiming state or binding.
+   * Must be quick; must not call `stopDaemon` or anything taking the same mutex.
+   * Throwing or rejecting refuses boot without claiming state or installing signal handlers.
+   */
+  beforeBind?: () => void | Promise<void>
   /** Build the Enkaku server for one accepted connection's transport. */
   serve: (transport: ServerTransportOf<Protocol>) => Server<Protocol>
   /**
@@ -233,6 +239,8 @@ export async function runDaemon<Protocol extends ProtocolDefinition>(
       }
       if (socketOnDisk) safeRemove(socketPath)
     }
+
+    await opts.beforeBind?.()
 
     const claimed: DaemonState = {
       pid: process.pid,

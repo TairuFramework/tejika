@@ -22,7 +22,7 @@ export {
   type SocketProbe,
   waitForSocket,
 } from './socket.js'
-export { type SpawnDaemonOptions, spawnDaemon } from './spawn.js'
+export { type SpawnDaemonOptions, type SpawnedDaemon, spawnDaemon } from './spawn.js'
 // Exported because every caller that passes an explicit `pidPath` — which `spawnDaemon`
 // does by default, and every test harness does — needs a supported way to name the mutex
 // guarding it. `@tejika/env`'s `getLockPath(app)` derives the same path, but only from an

@@ -1,5 +1,5 @@
 import { getEventListeners } from 'node:events'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer as createNetServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,13 +7,14 @@ import { setTimeout as delay } from 'node:timers/promises'
 import type { ClientMessage, ServerMessage, ServerTransportOf } from '@enkaku/protocol'
 import { serve } from '@enkaku/server'
 import { SocketTransport } from '@enkaku/socket'
+import { acquireFileLock, TimeoutInterruption } from '@sozai/lock'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { type DaemonHandle, type RunDaemonOptions, runDaemon } from '../src/daemon.js'
 import { DaemonAlreadyRunningError } from '../src/errors.js'
 import { isSocketLive } from '../src/socket.js'
 import * as stateModule from '../src/state.js'
-import { readDaemonState } from '../src/state.js'
+import { getLockPathFor, readDaemonState } from '../src/state.js'
 import type { PingProtocol } from './fixtures/protocol.js'
 
 const APP = 'tejika-test'
@@ -366,4 +367,52 @@ describe('connection handling', () => {
     client.destroy()
     expect(sawSocket).toBe(true)
   })
+})
+
+describe('beforeBind', () => {
+  test('awaits admission under the boot mutex before claiming state or binding', async () => {
+    let calls = 0
+    await boot({
+      beforeBind: async () => {
+        calls++
+        await delay(10)
+        expect(readDaemonState(pidPath)).toBeNull()
+        expect(existsSync(socketPath)).toBe(false)
+        let busy: unknown
+        try {
+          const lock = await acquireFileLock(getLockPathFor(pidPath), { timeout: 0 })
+          lock.release()
+        } catch (error) {
+          busy = error
+        }
+        expect(busy).toBeInstanceOf(TimeoutInterruption)
+      },
+    })
+    expect(calls).toBe(1)
+    expect(readDaemonState(pidPath)?.ready).toBe(true)
+    await expect(isSocketLive(socketPath)).resolves.toBe(true)
+  })
+
+  test.each(['throw', 'reject'] as const)(
+    '%s leaves no claim or handlers and releases the mutex',
+    async (mode) => {
+      const refusal = new Error('persistent stopped intent')
+      const termListeners = process.listeners('SIGTERM')
+      const intListeners = process.listeners('SIGINT')
+      const error = await boot({
+        handleSignals: true,
+        beforeBind: () => {
+          if (mode === 'throw') throw refusal
+          return Promise.reject(refusal)
+        },
+      }).catch((error: unknown) => error)
+      expect(error).toBe(refusal)
+      expect(existsSync(socketPath)).toBe(false)
+      expect(existsSync(pidPath)).toBe(false)
+      expect(process.listeners('SIGTERM')).toEqual(termListeners)
+      expect(process.listeners('SIGINT')).toEqual(intListeners)
+      await boot({ lockTimeoutMs: 0 })
+      await expect(isSocketLive(socketPath)).resolves.toBe(true)
+    },
+  )
 })

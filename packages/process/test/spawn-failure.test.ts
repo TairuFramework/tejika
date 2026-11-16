@@ -42,6 +42,7 @@ afterEach(() => {
 // daemon crashed instead of reporting a boot error. Vitest fails the run on an
 // unhandled rejection, so this test also asserts that by simply passing.
 test('a child that never spawns is a DaemonBootError, not an unhandled rejection', async () => {
+  let called = false
   const error = await spawnDaemon({
     app: 'tejika-test',
     entry: join(dir, 'never-runs.ts'),
@@ -49,8 +50,12 @@ test('a child that never spawns is a DaemonBootError, not an unhandled rejection
     pidPath: join(dir, 'app.pid'),
     logPath: join(dir, 'daemon.log'),
     timeoutMs: 2000,
+    onSpawn: () => {
+      called = true
+    },
   }).catch((err: unknown) => err)
 
+  expect(called).toBe(false)
   expect(error).toBeInstanceOf(DaemonBootError)
   expect((error as DaemonBootError).message).toContain('daemon failed to start')
   // The log path is the whole value of the wrapper: a raw ENOENT says nothing
